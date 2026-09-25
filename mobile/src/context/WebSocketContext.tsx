@@ -11,7 +11,7 @@ interface WebSocketContextValue {
 const WebSocketContext = createContext<WebSocketContextValue | undefined>(undefined);
 
 export function WebSocketProvider({ children }: { children: React.ReactNode }) {
-  const { token } = useAuthContext();
+  const { token, logout } = useAuthContext();
   const [isConnected, setIsConnected] = useState(false);
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
   const serviceRef = useRef(webSocketService);
@@ -28,6 +28,9 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
     const unsubOpen = service.onOpen(() => setIsConnected(true));
     const unsubClose = service.onClose(() => setIsConnected(false));
+    const unsubAuthFailure = service.onAuthFailure(() => {
+      void logout();
+    });
     const unsubMessage = service.onMessage((message) => {
       if (message.type === "user-online") {
         setOnlineUserIds((prev) => new Set(prev).add(message.userId));
@@ -47,9 +50,10 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     return () => {
       unsubOpen();
       unsubClose();
+      unsubAuthFailure();
       unsubMessage();
     };
-  }, [token]);
+  }, [logout, token]);
 
   useEffect(() => {
     const service = serviceRef.current;

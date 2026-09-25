@@ -14,6 +14,7 @@ if (!WS_URL) {
 
 type MessageHandler = (message: IncomingSignal) => void;
 type ConnectionHandler = () => void;
+type AuthFailureHandler = () => void;
 
 const RECONNECT_DELAY_MS = 2000;
 const MAX_RECONNECT_DELAY_MS = 15000;
@@ -35,6 +36,7 @@ export class WebSocketService {
   private messageHandlers = new Set<MessageHandler>();
   private openHandlers = new Set<ConnectionHandler>();
   private closeHandlers = new Set<ConnectionHandler>();
+  private authFailureHandlers = new Set<AuthFailureHandler>();
   private pendingMessages: OutgoingSignal[] = [];
   private bufferedIncomingMessages: BufferedIncomingMessage[] = [];
   private reconnectAttempt = 0;
@@ -77,6 +79,11 @@ export class WebSocketService {
         );
         this.bufferedIncomingMessages.push({ message: parsed, receivedAt: now });
         console.log("[signaling] received", parsed.type);
+        if (parsed.type === "error" && parsed.message.toLowerCase().includes("authentication failed")) {
+          this.manuallyClosed = true;
+          this.authFailureHandlers.forEach((handler) => handler());
+          socket.close(4001, "Unauthorized");
+        }
         this.messageHandlers.forEach((handler) => handler(parsed));
       } catch {
         console.warn("Received malformed WebSocket message");
@@ -139,6 +146,11 @@ export class WebSocketService {
   onClose(handler: ConnectionHandler): () => void {
     this.closeHandlers.add(handler);
     return () => this.closeHandlers.delete(handler);
+  }
+
+  onAuthFailure(handler: AuthFailureHandler): () => void {
+    this.authFailureHandlers.add(handler);
+    return () => this.authFailureHandlers.delete(handler);
   }
 
   disconnect(): void {

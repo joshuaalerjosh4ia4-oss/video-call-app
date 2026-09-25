@@ -35,12 +35,19 @@ export async function submitAdmission(studentId: string, sectionId: string, subj
   if (existing && existing.sectionId !== sectionId) throw new HttpError(409, "You can select only one course and section");
   const subjectFees = section.subjects.filter((subject) => subjectSelections.some(({ subjectId }) => subjectId === subject.id)).reduce((total, subject) => total + subject.units * 500, 0);
   const data = { sectionId, status: "SUBMITTED" as const, submittedAt: new Date(), enrollmentFee: fees.enrollment, subjectFees, otherFees: fees.other, totalFees: fees.enrollment + subjectFees + fees.other };
-  const admission = existing
-    ? await prisma.admission.update({ where: { id: existing.id }, data, include: { section: { include: { subjects: true } } } })
-    : await prisma.admission.create({ data: { studentId, ...data, subjects: { create: subjectSelections.map(({ subjectId, schedule }) => ({ subjectId, schedule })) } }, include: { section: { include: { subjects: true } }, subjects: { include: { subject: true } } } });
-  if (existing) await prisma.admissionSubject.deleteMany({ where: { admissionId: existing.id } });
-  if (existing) await prisma.admissionSubject.createMany({ data: subjectSelections.map(({ subjectId, schedule }) => ({ admissionId: existing.id, subjectId, schedule })) });
-  return admission;
+  const admissionId = existing
+    ? (await prisma.admission.update({ where: { id: existing.id }, data })).id
+    : (await prisma.admission.create({ data: { studentId, ...data, subjects: { create: subjectSelections.map(({ subjectId, schedule }) => ({ subjectId, schedule })) } } })).id;
+
+  if (existing) {
+    await prisma.admissionSubject.deleteMany({ where: { admissionId } });
+    await prisma.admissionSubject.createMany({ data: subjectSelections.map(({ subjectId, schedule }) => ({ admissionId, subjectId, schedule })) });
+  }
+
+  return prisma.admission.findUniqueOrThrow({
+    where: { id: admissionId },
+    include: { section: { include: { subjects: true } }, subjects: { include: { subject: true } } },
+  });
 }
 
 export async function listAdmissions(adminId: string) {

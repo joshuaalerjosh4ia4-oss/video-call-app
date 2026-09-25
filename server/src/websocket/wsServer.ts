@@ -69,6 +69,7 @@ export function attachWebSocketServer(httpServer: HttpServer): WebSocketServer {
     const identity = await authenticateRequest(req);
 
     if (!identity) {
+      console.warn(`[ws] rejected connection from ${req.socket.remoteAddress ?? "unknown"}: invalid or missing token`);
       send(socket, { type: "error", message: "Authentication failed: missing or invalid token" });
       socket.close(4001, "Unauthorized");
       return;
