@@ -1,0 +1,67 @@
+{
+  "expo": {
+    "name": "MyClaSSes",
+    "slug": "simplecall",
+    "scheme": "simplecall",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/Logosplash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.simplecall.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "SimpleCall needs access to your camera so the other person on the call can see you.",
+        "NSMicrophoneUsageDescription": "SimpleCall needs access to your microphone so the other person on the call can hear you."
+      }
+    },
+    "android": {
+      "package": "com.simplecall.app",
+      "usesCleartextTraffic": true,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0B1220"
+      },
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "MODIFY_AUDIO_SETTINGS",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "WAKE_LOCK",
+        "BLUETOOTH"
+      ]
+    },
+    "plugins": [
+      "expo-dev-client",
+      "expo-secure-store",
+      "expo-notifications",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "MyClaSSes needs access to your camera so the other person on the call can see you.",
+          "microphonePermission": "MyClaSSes needs access to your microphone so the other person on the call can hear you."
+        }
+      ],
+      [
+        "@config-plugins/react-native-webrtc",
+        {
+          "cameraPermission": "MyClaSSes needs access to your camera so the other person on the call can see you.",
+          "microphonePermission": "MyClaSSes needs access to your microphone so the other person on the call can hear you."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "replace-with-your-eas-project-id"
+      }
+    }
+  }
+}

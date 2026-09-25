@@ -1,0 +1,19 @@
+# Node
+node_modules/
+npm-debug.log*
+
+# Server
+server/dist/
+server/.env
+.env
+
+# Mobile
+mobile/.expo/
+mobile/dist/
+mobile/android/
+mobile/ios/
+mobile/.env
+
+# Misc
+.DS_Store
+*.log

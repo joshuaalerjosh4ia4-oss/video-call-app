@@ -1,0 +1,1 @@
+ALTER TABLE "admission_subjects" ADD COLUMN "schedule" TEXT NOT NULL DEFAULT 'morning';
