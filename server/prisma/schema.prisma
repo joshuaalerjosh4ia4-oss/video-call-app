@@ -15,6 +15,12 @@ enum UserRole {
   ADMIN
 }
 
+enum Sex {
+  FEMALE
+  MALE
+  OTHER
+}
+
 enum AdmissionStatus {
   DRAFT
   SUBMITTED
@@ -32,6 +38,18 @@ model User {
   username     String   @unique
   email        String   @unique
   passwordHash String
+  emailVerified Boolean @default(false)
+  mustChangePassword Boolean @default(false)
+  mobilePhone  String?
+  age          Int?
+  sex          Sex?
+  blk          String?
+  lot          String?
+  street       String?
+  villagePurok String?
+  barangay     String?
+  municipality String?
+  region       String?
   role         UserRole @default(STUDENT)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -40,8 +58,21 @@ model User {
   enrollments  Enrollment[]
   sections     CourseSection[]
   admissions   Admission[]
+  emailVerificationCode EmailVerificationCode?
 
   @@map("users")
+}
+
+model EmailVerificationCode {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("email_verification_codes")
 }
 
 model Room {

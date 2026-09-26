@@ -1,0 +1,13 @@
+CREATE TYPE "Sex" AS ENUM ('FEMALE', 'MALE', 'OTHER');
+
+ALTER TABLE "users"
+ADD COLUMN "mobilePhone" TEXT,
+ADD COLUMN "age" INTEGER,
+ADD COLUMN "sex" "Sex",
+ADD COLUMN "blk" TEXT,
+ADD COLUMN "lot" TEXT,
+ADD COLUMN "street" TEXT,
+ADD COLUMN "villagePurok" TEXT,
+ADD COLUMN "barangay" TEXT,
+ADD COLUMN "municipality" TEXT,
+ADD COLUMN "region" TEXT;

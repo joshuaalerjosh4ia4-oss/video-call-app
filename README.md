@@ -7,6 +7,7 @@ PostgreSQL-backed admissions, WebRTC video calls, and weekly class reminders.
 ## Features
 
 - Student registration and login with JWT authentication
+- Email-based temporary password reset with required password change
 - Student, teacher, and admin roles
 - Course sections and subject enrollment
 - Exact subject schedules: weekday, start time, and end time
@@ -92,6 +93,20 @@ copy mobile\.env.example mobile\.env
 For macOS/Linux, use `cp` instead of `copy`.
 
 Configure `server/.env`:
+Email verification requires SMTP access. Add your provider's settings to
+`server/.env` so the backend can send 6-digit codes:
+
+```env
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-smtp-username
+SMTP_PASSWORD=your-smtp-password
+SMTP_FROM="MyClaSSes <no-reply@example.com>"
+```
+
+Use port `465` with `SMTP_SECURE=true` when required by your provider. New
+accounts must verify the code sent to their email before they can sign in.
 
 
 

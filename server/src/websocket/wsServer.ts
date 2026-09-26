@@ -39,8 +39,11 @@ async function authenticateRequest(req: IncomingMessage): Promise<{ userId: stri
     const token = url.searchParams.get("token");
     if (!token) return null;
     const payload = verifyToken(token);
-    const user = await prisma.user.findUnique({ where: { id: payload.userId }, select: { username: true, role: true } });
-    if (!user) return null;
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { username: true, role: true, mustChangePassword: true },
+    });
+    if (!user || user.mustChangePassword) return null;
     return { userId: payload.userId, username: user.username, role: user.role };
   } catch {
     return null;

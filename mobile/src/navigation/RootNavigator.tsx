@@ -5,6 +5,8 @@ import { RootStackParamList } from "./types";
 import { markNavigationReady, navigationRef } from "./navigationRef";
 import LoginScreen from "../screens/LoginScreen";
 import RegisterScreen from "../screens/RegisterScreen";
+import ForgotPasswordScreen from "../screens/ForgotPasswordScreen";
+import ChangePasswordScreen from "../screens/ChangePasswordScreen";
 import HomeScreen from "../screens/HomeScreen";
 import MeetingHistoryScreen from "../screens/CallHistoryScreen";
 import RoomScreen from "../screens/RoomScreen";
@@ -34,9 +36,14 @@ export default function RootNavigator() {
 
   return (
     <NavigationContainer ref={navigationRef} onReady={markNavigationReady}>
-      <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName={user ? "Main" : "Login"}>
+      <Stack.Navigator
+        screenOptions={{ headerShown: false }}
+        initialRouteName={user ? (user.mustChangePassword ? "ChangePassword" : "Main") : "Login"}
+      >
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="Register" component={RegisterScreen} />
+        <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+        <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
         <Stack.Screen name="Main" component={MainScreen} />
         <Stack.Screen name="Home" component={HomeScreen} />
         <Stack.Screen name="Room" component={RoomScreen} />

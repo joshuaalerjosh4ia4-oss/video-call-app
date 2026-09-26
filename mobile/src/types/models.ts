@@ -3,6 +3,17 @@ export interface User {
   username: string;
   email: string;
   role: "STUDENT" | "TEACHER" | "ADMIN";
+  mustChangePassword?: boolean;
+  mobilePhone?: string | null;
+  age?: number | null;
+  sex?: "FEMALE" | "MALE" | "OTHER" | null;
+  blk?: string | null;
+  lot?: string | null;
+  street?: string | null;
+  villagePurok?: string | null;
+  barangay?: string | null;
+  municipality?: string | null;
+  region?: string | null;
   createdAt?: string;
   online?: boolean;
 }

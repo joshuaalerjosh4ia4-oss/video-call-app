@@ -1,6 +1,12 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { User } from "../types/models";
-import { loginRequest, registerRequest, fetchCurrentUser } from "../api/auth";
+import {
+  changePasswordRequest,
+  fetchCurrentUser,
+  loginRequest,
+  registerRequest,
+  RegistrationInput,
+} from "../api/auth";
 import { ApiRequestError } from "../api/client";
 import { saveAuthToken, getAuthToken, saveStoredUser, getStoredUser, clearAuthStorage } from "../utils/storage";
 
@@ -9,8 +15,9 @@ interface AuthContextValue {
   token: string | null;
   isLoading: boolean;
   error: string | null;
-  login: (email: string, password: string) => Promise<void>;
-  register: (username: string, email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<boolean>;
+  register: (input: RegistrationInput) => Promise<void>;
+  changePassword: (newPassword: string) => Promise<void>;
   logout: () => Promise<void>;
   clearError: () => void;
 }
@@ -59,6 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await saveStoredUser(JSON.stringify(result.user));
       setToken(result.token);
       setUser(result.user);
+      return result.user.mustChangePassword === true;
     } catch (err) {
       const message = err instanceof ApiRequestError ? err.message : "Unable to sign in. Please try again.";
       setError(message);
@@ -66,14 +74,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const register = useCallback(async (username: string, email: string, password: string) => {
+  const changePassword = useCallback(async (newPassword: string) => {
     setError(null);
     try {
-      const result = await registerRequest({ username, email, password });
-      await saveAuthToken(result.token);
-      await saveStoredUser(JSON.stringify(result.user));
-      setToken(result.token);
-      setUser(result.user);
+      await changePasswordRequest({ newPassword });
+      if (user) {
+        const updatedUser = { ...user, mustChangePassword: false };
+        setUser(updatedUser);
+        await saveStoredUser(JSON.stringify(updatedUser));
+      }
+    } catch (err) {
+      const message = err instanceof ApiRequestError ? err.message : "Unable to change your password. Please try again.";
+      setError(message);
+      throw err;
+    }
+  }, [user]);
+
+  const register = useCallback(async (input: RegistrationInput) => {
+    setError(null);
+    try {
+      await registerRequest(input);
     } catch (err) {
       const message = err instanceof ApiRequestError ? err.message : "Unable to create your account.";
       setError(message);
@@ -90,8 +110,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const clearError = useCallback(() => setError(null), []);
 
   const value = useMemo(
-    () => ({ user, token, isLoading, error, login, register, logout, clearError }),
-    [user, token, isLoading, error, login, register, logout, clearError]
+    () => ({ user, token, isLoading, error, login, register, changePassword, logout, clearError }),
+    [user, token, isLoading, error, login, register, changePassword, logout, clearError]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

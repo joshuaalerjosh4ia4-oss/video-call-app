@@ -25,8 +25,8 @@ export default function LoginScreen({ navigation, route }: Props) {
 
     setIsSubmitting(true);
     try {
-      await login(email.trim().toLowerCase(), password);
-      navigation.replace("Main");
+      const mustChangePassword = await login(email.trim().toLowerCase(), password);
+      navigation.replace(mustChangePassword ? "ChangePassword" : "Main");
     } catch {
       // error is surfaced via context's `error` field
     } finally {
@@ -78,6 +78,9 @@ export default function LoginScreen({ navigation, route }: Props) {
 
       <TouchableOpacity className="mt-4 items-center" onPress={() => navigation.navigate("Register")}>
         <Text className="text-sm font-semibold text-app-primary-light">Create Account</Text>
+      </TouchableOpacity>
+      <TouchableOpacity className="mt-4 items-center" onPress={() => navigation.navigate("ForgotPassword")}>
+        <Text className="text-sm font-semibold text-app-primary-light">Forgot Password?</Text>
       </TouchableOpacity>
     </KeyboardAvoidingView>
   );
