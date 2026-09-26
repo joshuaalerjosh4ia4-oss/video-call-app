@@ -108,6 +108,11 @@ SMTP_FROM="MyClaSSes <no-reply@example.com>"
 Use port `465` with `SMTP_SECURE=true` when required by your provider. New
 accounts must verify the code sent to their email before they can sign in.
 
+Render Free services block outbound SMTP. For Render Free, use Resend over
+HTTPS instead by setting `RESEND_API_KEY` and `RESEND_FROM` on the web service.
+Verify the sender domain with Resend before using it as `RESEND_FROM`. When
+`RESEND_API_KEY` is present, it is used instead of SMTP.
+
 
 
 Generate a strong secret with:

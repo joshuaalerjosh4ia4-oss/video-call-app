@@ -35,9 +35,9 @@ export class ApiRequestError extends Error {
 
 async function request<T>(
   path: string,
-  options: { method?: string; body?: unknown; auth?: boolean } = {}
+  options: { method?: string; body?: unknown; auth?: boolean; timeoutMs?: number } = {}
 ): Promise<T> {
-  const { method = "GET", body, auth = true } = options;
+  const { method = "GET", body, auth = true, timeoutMs } = options;
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -51,17 +51,25 @@ async function request<T>(
   }
 
   let response: Response;
+  const controller = timeoutMs ? new AbortController() : undefined;
+  const timeout = timeoutMs ? setTimeout(() => controller?.abort(), timeoutMs) : undefined;
   try {
     response = await fetch(`${API_URL}${path}`, {
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: controller?.signal,
     });
   } catch {
+    if (controller?.signal.aborted) {
+      throw new ApiRequestError("The email request timed out. Check the server's email provider settings and try again.", 408);
+    }
     throw new ApiRequestError(
       "Could not reach the server. Check that EXPO_PUBLIC_API_URL is correct and your phone is on the same network.",
       0
     );
+  } finally {
+    if (timeout) clearTimeout(timeout);
   }
 
   const json = (await response.json().catch(() => null)) as ApiSuccess<T> | ApiError | null;
@@ -76,6 +84,7 @@ async function request<T>(
 
 export const apiClient = {
   get: <T>(path: string, auth = true) => request<T>(path, { method: "GET", auth }),
-  post: <T>(path: string, body?: unknown, auth = true) => request<T>(path, { method: "POST", body, auth }),
+  post: <T>(path: string, body?: unknown, auth = true, timeoutMs?: number) =>
+    request<T>(path, { method: "POST", body, auth, timeoutMs }),
   patch: <T>(path: string, body?: unknown, auth = true) => request<T>(path, { method: "PATCH", body, auth }),
 };

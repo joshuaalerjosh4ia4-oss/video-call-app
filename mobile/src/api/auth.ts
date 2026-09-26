@@ -34,7 +34,7 @@ export function loginRequest(input: { email: string; password: string }) {
 }
 
 export function forgotPasswordRequest(input: { email: string }) {
-  return apiClient.post<{ message: string }>("/api/auth/forgot-password", input, false);
+  return apiClient.post<{ message: string }>("/api/auth/forgot-password", input, false, 20_000);
 }
 
 export function changePasswordRequest(input: { newPassword: string }) {
