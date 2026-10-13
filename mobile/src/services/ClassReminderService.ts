@@ -43,7 +43,6 @@ export async function scheduleClassReminders(admission: Admission | null): Promi
   await Notifications.setNotificationChannelAsync("class-reminders", {
     name: "Class reminders",
     importance: Notifications.AndroidImportance.HIGH,
-    sound: "default",
   });
 
   await Promise.all(
@@ -54,7 +53,6 @@ export async function scheduleClassReminders(admission: Admission | null): Promi
         content: {
           title: "Class starting soon",
           body: `${subject.code} - ${subject.title} starts in 10 minutes at ${subject.startTime}.`,
-          sound: "default",
           data: { subjectId: subject.id },
         },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.WEEKLY, weekday: time.weekday, hour: time.hour, minute: time.minute, channelId: "class-reminders" },
