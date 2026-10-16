@@ -1,0 +1,552 @@
+warning: in the working copy of 'mobile/src/types/models.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/prisma/schema.prisma', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/config/env.ts', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/.gitignore b/.gitignore[m
+[1mindex 93174b5..97d5473 100644[m
+[1m--- a/.gitignore[m
+[1m+++ b/.gitignore[m
+[36m@@ -20,5 +20,6 @@[m [mmobile/.env[m
+ [m
+ .env[m
+ .env.example[m
+[32m+[m[32m!server/.env.example[m
+ .vscode[m
+ docker-compose.yml[m
+\ No newline at end of file[m
+[1mdiff --git a/mobile/src/api/enrollments.ts b/mobile/src/api/enrollments.ts[m
+[1mindex 3ddde57..f70a165 100644[m
+[1m--- a/mobile/src/api/enrollments.ts[m
+[1m+++ b/mobile/src/api/enrollments.ts[m
+[36m@@ -5,6 +5,6 @@[m [mexport function fetchEnrollments() {[m
+   return apiClient.get<Enrollment[]>("/api/enrollments");[m
+ }[m
+ [m
+[31m-export function enrollInCourse(courseCode: string) {[m
+[31m-  return apiClient.post<Enrollment>("/api/enrollments", { courseCode });[m
+[32m+[m[32mexport function enrollInCourse(joinCode: string) {[m
+[32m+[m[32m  return apiClient.post<Enrollment>("/api/enrollments", { joinCode });[m
+ }[m
+\ No newline at end of file[m
+[1mdiff --git a/mobile/src/screens/AdminSectionCreateScreen.tsx b/mobile/src/screens/AdminSectionCreateScreen.tsx[m
+[1mindex 7ce9376..a6f73b0 100644[m
+[1m--- a/mobile/src/screens/AdminSectionCreateScreen.tsx[m
+[1m+++ b/mobile/src/screens/AdminSectionCreateScreen.tsx[m
+[36m@@ -24,7 +24,11 @@[m [mexport default function AdminSectionCreateScreen({ navigation }: Props) {[m
+   async function handleCreate() {[m
+     const subjects = parseSubjects();[m
+     if (!course.trim() || !code.trim() || !subjects.length || subjects.some((subject) => !subject.code || !subject.dayOfWeek || !/^([01]\d|2[0-3]):[0-5]\d$/.test(subject.startTime) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(subject.endTime) || subject.startTime >= subject.endTime)) { Alert.alert("Incomplete schedule", "Use CODE|DAY|START|END for every subject, for example MATH|Mon|08:00|10:00."); return; }[m
+[31m-    try { await createCourseSection({ course: course.trim(), code: code.trim().toUpperCase(), yearLevel: Number(yearLevel), semester, subjects }); Alert.alert("Section created", "Students can now select this section."); navigation.goBack(); } catch (error) { Alert.alert("Could not create section", error instanceof Error ? error.message : "Please try again."); }[m
+[32m+[m[32m    try {[m
+[32m+[m[32m      const createdSection = await createCourseSection({ course: course.trim(), code: code.trim().toUpperCase(), yearLevel: Number(yearLevel), semester, subjects });[m
+[32m+[m[32m      const joinCodes = createdSection.subjects.map((subject) => `${subject.title}: ${subject.joinCode}`).join("\n");[m
+[32m+[m[32m      Alert.alert("Section created", `Share these 6-digit codes with students:\n\n${joinCodes}`, [{ text: "Done", onPress: () => navigation.goBack() }]);[m
+[32m+[m[32m    } catch (error) { Alert.alert("Could not create section", error instanceof Error ? error.message : "Please try again."); }[m
+   }[m
+   return <View className="flex-1 bg-app-bg px-4 pt-14"><TouchableOpacity onPress={() => navigation.goBack()}><Text className="text-app-primary-light">Back</Text></TouchableOpacity><Text className="mt-5 text-2xl font-bold text-app-text">Create Course Section</Text><TextInput className="mt-6 rounded-xl bg-app-surface px-4 py-3 text-app-text" placeholder="Course (e.g. BSIT)" placeholderTextColor="#968D82" value={course} onChangeText={setCourse} /><TextInput className="mt-3 rounded-xl bg-app-surface px-4 py-3 text-app-text" placeholder="Section code (e.g. BSIT-1A)" placeholderTextColor="#968D82" value={code} onChangeText={setCode} /><TextInput className="mt-3 rounded-xl bg-app-surface px-4 py-3 text-app-text" placeholder="Year level" placeholderTextColor="#968D82" keyboardType="number-pad" value={yearLevel} onChangeText={setYearLevel} /><Text className="mt-4 text-sm text-app-muted-2">Subject format: CODE|DAY|START|END, separated by commas</Text><TextInput className="mt-2 rounded-xl bg-app-surface px-4 py-3 text-app-text" placeholder="MATH|Mon|08:00|10:00, ENG|Wed|10:00|12:00" placeholderTextColor="#968D82" value={subjectText} onChangeText={setSubjectText} /><TouchableOpacity className="mt-5 items-center rounded-xl bg-app-primary py-3" onPress={handleCreate}><Text className="font-bold text-white">Create Section</Text></TouchableOpacity></View>;[m
+ }[m
+\ No newline at end of file[m
+[1mdiff --git a/mobile/src/screens/SubjectScreen.tsx b/mobile/src/screens/SubjectScreen.tsx[m
+[1mindex 3123c1f..d7ff67b 100644[m
+[1m--- a/mobile/src/screens/SubjectScreen.tsx[m
+[1m+++ b/mobile/src/screens/SubjectScreen.tsx[m
+[36m@@ -1,6 +1,17 @@[m
+ import { useEffect, useState } from "react";[m
+ import { Ionicons } from "@expo/vector-icons";[m
+[31m-import { Alert, FlatList, Modal, RefreshControl, Text, TextInput, TouchableOpacity, View } from "react-native";[m
+[32m+[m[32mimport {[m
+[32m+[m[32m  Alert,[m
+[32m+[m[32m  FlatList,[m
+[32m+[m[32m  KeyboardAvoidingView,[m
+[32m+[m[32m  Modal,[m
+[32m+[m[32m  Platform,[m
+[32m+[m[32m  RefreshControl,[m
+[32m+[m[32m  Text,[m
+[32m+[m[32m  TextInput,[m
+[32m+[m[32m  TouchableOpacity,[m
+[32m+[m[32m  View,[m
+[32m+[m[32m} from "react-native";[m
+ import { Admission, EnrolledSubject } from "../types/models";[m
+ import { enrollInCourse, fetchEnrollments } from "../api/enrollments";[m
+ import { fetchMyAdmission } from "../api/admissions";[m
+[36m@@ -36,7 +47,16 @@[m [mexport default function SubjectScreen() {[m
+     if (refresh) setIsRefreshing(true); else setIsLoading(true);[m
+     try {[m
+       const [enrollments, currentAdmission] = await Promise.all([fetchEnrollments(), fetchMyAdmission()]);[m
+[31m-      setSubjects(enrollments.map((enrollment) => ({ id: enrollment.id, code: enrollment.courseCode })));[m
+[32m+[m[32m      setSubjects(enrollments.map((enrollment) => ({[m
+[32m+[m[32m        id: enrollment.id,[m
+[32m+[m[32m        code: enrollment.courseCode,[m
+[32m+[m[32m        title: enrollment.subject?.title,[m
+[32m+[m[32m        course: enrollment.subject?.section.course,[m
+[32m+[m[32m        sectionCode: enrollment.subject?.section.code,[m
+[32m+[m[32m        dayOfWeek: enrollment.subject?.dayOfWeek,[m
+[32m+[m[32m        startTime: enrollment.subject?.startTime,[m
+[32m+[m[32m        endTime: enrollment.subject?.endTime,[m
+[32m+[m[32m      })));[m
+       setAdmission(currentAdmission);[m
+       await scheduleClassReminders(currentAdmission);[m
+     } catch { setSubjects([]); setAdmission(null); }[m
+[36m@@ -45,14 +65,23 @@[m [mexport default function SubjectScreen() {[m
+ [m
+   async function handleAddSubject() {[m
+     const code = subjectCode.trim();[m
+[31m-    if (!code) {[m
+[31m-      Alert.alert("Subject code required", "Enter the course and section code.");[m
+[32m+[m[32m    if (!/^\d{6}$/.test(code)) {[m
+[32m+[m[32m      Alert.alert("6-digit code required", "Enter the 6-digit subject join code.");[m
+       return;[m
+     }[m
+ [m
+     try {[m
+       const enrollment = await enrollInCourse(code);[m
+[31m-      const subject = { id: enrollment.id, code: enrollment.courseCode };[m
+[32m+[m[32m      const subject = {[m
+[32m+[m[32m        id: enrollment.id,[m
+[32m+[m[32m        code: enrollment.courseCode,[m
+[32m+[m[32m        title: enrollment.subject?.title,[m
+[32m+[m[32m        course: enrollment.subject?.section.course,[m
+[32m+[m[32m        sectionCode: enrollment.subject?.section.code,[m
+[32m+[m[32m        dayOfWeek: enrollment.subject?.dayOfWeek,[m
+[32m+[m[32m        startTime: enrollment.subject?.startTime,[m
+[32m+[m[32m        endTime: enrollment.subject?.endTime,[m
+[32m+[m[32m      };[m
+       setSubjects((current) => [subject, ...current]);[m
+       setSubjectCode("");[m
+       setIsAddModalVisible(false);[m
+[36m@@ -62,18 +91,27 @@[m [mexport default function SubjectScreen() {[m
+   }[m
+ [m
+   function getClassTitle(subject: EnrolledSubject) {[m
+[31m-    return admission?.subjects?.find((item) => item.subject.code === subject.code)?.subject.title ?? subject.code;[m
+[32m+[m[32m    if (subject.title) return subject.title;[m
+[32m+[m[32m    return admission?.subjects?.find([m
+[32m+[m[32m      (item) => item.subject.joinCode === subject.code || item.subject.code === subject.code[m
+[32m+[m[32m    )?.subject.title ?? "Enrolled subject";[m
+   }[m
+ [m
+[31m-  function getClassSubtitle() {[m
+[32m+[m[32m  function getClassSubtitle(subject?: EnrolledSubject) {[m
+[32m+[m[32m    if (subject?.course && subject.sectionCode) return `${subject.course} · ${subject.sectionCode}`;[m
+     return admission?.section ? `${admission.section.course} · ${admission.section.code}` : "Enrolled subject";[m
+   }[m
+ [m
+   function getClassSchedule(subject: EnrolledSubject) {[m
+[31m-    const schedule = admission?.subjects?.find((item) => item.subject.code === subject.code)?.subject;[m
+[31m-    if (!schedule) return "Schedule pending";[m
+[31m-    const day = ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][schedule.dayOfWeek];[m
+[31m-    return `${day} · ${schedule.startTime}-${schedule.endTime}`;[m
+[32m+[m[32m    const admissionSubject = admission?.subjects?.find([m
+[32m+[m[32m      (item) => item.subject.joinCode === subject.code || item.subject.code === subject.code[m
+[32m+[m[32m    )?.subject;[m
+[32m+[m[32m    const dayOfWeek = subject.dayOfWeek ?? admissionSubject?.dayOfWeek;[m
+[32m+[m[32m    const startTime = subject.startTime ?? admissionSubject?.startTime;[m
+[32m+[m[32m    const endTime = subject.endTime ?? admissionSubject?.endTime;[m
+[32m+[m[32m    if (!dayOfWeek || !startTime || !endTime) return "Schedule pending";[m
+[32m+[m[32m    const day = ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][dayOfWeek];[m
+[32m+[m[32m    return `${day} · ${startTime}-${endTime}`;[m
+   }[m
+ [m
+   const filteredSubjects = subjects.filter((subject) => subject.code.toLowerCase().includes(searchQuery.trim().toLowerCase()));[m
+[36m@@ -113,9 +151,9 @@[m [mexport default function SubjectScreen() {[m
+           <TouchableOpacity className="mb-4 overflow-hidden rounded-2xl border border-app-border bg-app-surface" onPress={() => { setSelectedSubject(item); setActiveClassroomTab("Stream"); }}>[m
+             <View className="h-24 justify-end p-4" style={{ backgroundColor: bannerColors[subjects.findIndex((subject) => subject.id === item.id) % bannerColors.length] }}>[m
+               <Text className="text-xl font-bold text-white" numberOfLines={1}>{getClassTitle(item)}</Text>[m
+[31m-              <Text className="mt-1 text-sm text-blue-100">{getClassSubtitle()} · {getClassSchedule(item)}</Text>[m
+[32m+[m[32m              <Text className="mt-1 text-sm text-blue-100">{getClassSubtitle(item)} · {getClassSchedule(item)}</Text>[m
+             </View>[m
+[31m-            <View className="p-4"><View className="flex-row items-center justify-between"><Text className="font-semibold text-app-text">{item.code}</Text><Ionicons name="chevron-forward" size={19} color="#563B68" /></View><Text className="mt-2 text-sm text-app-muted-2">No upcoming work</Text></View>[m
+[32m+[m[32m            <View className="p-4"><View className="flex-row items-center justify-end"><Ionicons name="chevron-forward" size={19} color="#563B68" /></View><Text className="mt-2 text-sm text-app-muted-2">No upcoming work</Text></View>[m
+           </TouchableOpacity>[m
+         )}[m
+         ListEmptyComponent={[m
+[36m@@ -131,7 +169,7 @@[m [mexport default function SubjectScreen() {[m
+ [m
+       <Modal animationType="slide" visible={selectedSubject !== null} onRequestClose={() => setSelectedSubject(null)}>[m
+         <View className="flex-1 bg-app-bg pt-14"><View className="flex-row items-center justify-between px-4 pb-4"><TouchableOpacity onPress={() => setSelectedSubject(null)}><Ionicons name="arrow-back" size={24} color="#563B68" /></TouchableOpacity><Text className="text-lg font-bold text-app-text">Classroom</Text><View className="w-6" /></View>[m
+[31m-          {selectedSubject ? <><View className="mx-4 rounded-2xl p-5" style={{ backgroundColor: bannerColors[subjects.findIndex((subject) => subject.id === selectedSubject.id) % bannerColors.length] }}><Text className="text-2xl font-bold text-white">{getClassTitle(selectedSubject)}</Text><Text className="mt-2 text-blue-100">{selectedSubject.code} · {getClassSubtitle()} · {getClassSchedule(selectedSubject)}</Text></View>[m
+[32m+[m[32m          {selectedSubject ? <><View className="mx-4 rounded-2xl p-5" style={{ backgroundColor: bannerColors[subjects.findIndex((subject) => subject.id === selectedSubject.id) % bannerColors.length] }}><Text className="text-2xl font-bold text-white">{getClassTitle(selectedSubject)}</Text><Text className="mt-2 text-blue-100">{getClassSubtitle(selectedSubject)} · {getClassSchedule(selectedSubject)}</Text></View>[m
+             <View className="mt-4 flex-row border-b border-app-border px-4">{(["Stream", "Classwork", "People"] as ClassroomTab[]).map((tab) => <TouchableOpacity key={tab} className={`mr-6 pb-3 ${activeClassroomTab === tab ? "border-b-2 border-app-primary" : ""}`} onPress={() => setActiveClassroomTab(tab)}><Text className={`font-semibold ${activeClassroomTab === tab ? "text-app-primary-light" : "text-app-muted-2"}`}>{tab}</Text></TouchableOpacity>)}</View>[m
+             <View className="mx-4 mt-5 rounded-2xl border border-app-border bg-app-surface p-5"><Ionicons name={activeClassroomTab === "Stream" ? "chatbubble-ellipses-outline" : activeClassroomTab === "Classwork" ? "document-text-outline" : "people-outline"} size={30} color="#563B68" /><Text className="mt-3 text-base font-bold text-app-text">{activeClassroomTab === "Stream" ? "No announcements yet" : activeClassroomTab === "Classwork" ? "No classwork yet" : "Class members"}</Text><Text className="mt-2 text-sm leading-5 text-app-muted-2">{activeClassroomTab === "People" ? "Member details will appear when classroom membership is available." : "Your teacher has not posted anything here yet."}</Text></View>[m
+           </> : null}[m
+[36m@@ -139,29 +177,36 @@[m [mexport default function SubjectScreen() {[m
+       </Modal>[m
+ [m
+       <Modal animationType="fade" transparent visible={isAddModalVisible} onRequestClose={() => setIsAddModalVisible(false)}>[m
+[31m-        <View className="flex-1 justify-end bg-black/60">[m
+[31m-          <View className="rounded-t-3xl bg-app-surface p-5">[m
+[31m-            <View className="flex-row items-center justify-between">[m
+[31m-              <Text className="text-lg font-bold text-app-text">Enroll in a subject</Text>[m
+[31m-              <TouchableOpacity accessibilityLabel="Close" onPress={() => setIsAddModalVisible(false)}>[m
+[31m-                <Ionicons name="close" size={24} color="#9CA3AF" />[m
+[32m+[m[32m        <KeyboardAvoidingView[m
+[32m+[m[32m          className="flex-1"[m
+[32m+[m[32m          behavior={Platform.OS === "ios" ? "padding" : "height"}[m
+[32m+[m[32m        >[m
+[32m+[m[32m          <View className="flex-1 justify-end bg-black/60">[m
+[32m+[m[32m            <View className="rounded-t-3xl bg-app-surface p-5">[m
+[32m+[m[32m              <View className="flex-row items-center justify-between">[m
+[32m+[m[32m                <Text className="text-lg font-bold text-app-text">Enroll in a subject</Text>[m
+[32m+[m[32m                <TouchableOpacity accessibilityLabel="Close" onPress={() => setIsAddModalVisible(false)}>[m
+[32m+[m[32m                  <Ionicons name="close" size={24} color="#9CA3AF" />[m
+[32m+[m[32m                </TouchableOpacity>[m
+[32m+[m[32m              </View>[m
+[32m+[m[32m              <TextInput[m
+[32m+[m[32m                autoFocus[m
+[32m+[m[32m                keyboardType="number-pad"[m
+[32m+[m[32m                maxLength={6}[m
+[32m+[m[32m                className="mt-5 rounded-xl border border-app-border bg-app-bg px-4 py-3 text-app-text"[m
+[32m+[m[32m                placeholder="6-digit subject join code"[m
+[32m+[m[32m                placeholderTextColor="#968D82"[m
+[32m+[m[32m                value={subjectCode}[m
+[32m+[m[32m                onChangeText={setSubjectCode}[m
+[32m+[m[32m                onSubmitEditing={handleAddSubject}[m
+[32m+[m[32m                returnKeyType="done"[m
+[32m+[m[32m              />[m
+[32m+[m[32m              <TouchableOpacity className="mt-4 items-center rounded-xl bg-app-primary py-3" onPress={handleAddSubject}>[m
+[32m+[m[32m                <Text className="font-bold text-white">Enroll</Text>[m
+               </TouchableOpacity>[m
+             </View>[m
+[31m-            <TextInput[m
+[31m-              autoFocus[m
+[31m-              className="mt-5 rounded-xl border border-app-border bg-app-bg px-4 py-3 text-app-text"[m
+[31m-              placeholder="Course and section code (e.g. CS101-A)"[m
+[31m-              placeholderTextColor="#968D82"[m
+[31m-              value={subjectCode}[m
+[31m-              onChangeText={setSubjectCode}[m
+[31m-              onSubmitEditing={handleAddSubject}[m
+[31m-              returnKeyType="done"[m
+[31m-            />[m
+[31m-            <TouchableOpacity className="mt-4 items-center rounded-xl bg-app-primary py-3" onPress={handleAddSubject}>[m
+[31m-              <Text className="font-bold text-white">Enroll</Text>[m
+[31m-            </TouchableOpacity>[m
+           </View>[m
+[31m-        </View>[m
+[32m+[m[32m        </KeyboardAvoidingView>[m
+       </Modal>[m
+     </View>[m
+   );[m
+[1mdiff --git a/mobile/src/types/models.ts b/mobile/src/types/models.ts[m
+[1mindex 51c2a0b..68b3502 100644[m
+[1m--- a/mobile/src/types/models.ts[m
+[1m+++ b/mobile/src/types/models.ts[m
+[36m@@ -33,17 +33,34 @@[m [mexport interface SavedRoom {[m
+ export interface EnrolledSubject {[m
+   id: string;[m
+   code: string;[m
+[32m+[m[32m  title?: string;[m
+[32m+[m[32m  course?: string;[m
+[32m+[m[32m  sectionCode?: string;[m
+[32m+[m[32m  dayOfWeek?: number;[m
+[32m+[m[32m  startTime?: string;[m
+[32m+[m[32m  endTime?: string;[m
+ }[m
+ [m
+ export interface Enrollment {[m
+   id: string;[m
+   courseCode: string;[m
+   createdAt?: string;[m
+[32m+[m[32m  subject?: {[m
+[32m+[m[32m    id: string;[m
+[32m+[m[32m    code: string;[m
+[32m+[m[32m    joinCode: string;[m
+[32m+[m[32m    title: string;[m
+[32m+[m[32m    dayOfWeek: number;[m
+[32m+[m[32m    startTime: string;[m
+[32m+[m[32m    endTime: string;[m
+[32m+[m[32m    section: { course: string; code: string };[m
+[32m+[m[32m  } | null;[m
+ }[m
+ [m
+ export interface AdmissionSubject {[m
+   id: string;[m
+   code: string;[m
+[32m+[m[32m  joinCode: string;[m
+   title: string;[m
+   units: number;[m
+   schedule?: "morning" | "afternoon" | "evening";[m
+[1mdiff --git a/server/prisma/schema.prisma b/server/prisma/schema.prisma[m
+[1mindex d5c2991..1745c65 100644[m
+[1m--- a/server/prisma/schema.prisma[m
+[1m+++ b/server/prisma/schema.prisma[m
+[36m@@ -120,6 +120,7 @@[m [mmodel CourseSection {[m
+ model Subject {[m
+   id         String        @id @default(uuid())[m
+   code       String[m
+[32m+[m[32m  joinCode   String        @unique[m
+   title      String[m
+   units      Int[m
+   dayOfWeek  Int           @default(1)[m
+[36m@@ -168,4 +169,3 @@[m [mmodel AdmissionSubject {[m
+   @@id([admissionId, subjectId])[m
+   @@map("admission_subjects")[m
+ }[m
+[31m-[m
+[1mdiff --git a/server/src/config/env.ts b/server/src/config/env.ts[m
+[1mindex baa61f8..9cada70 100644[m
+[1m--- a/server/src/config/env.ts[m
+[1m+++ b/server/src/config/env.ts[m
+[36m@@ -16,12 +16,7 @@[m [mexport const env = {[m
+   port: Number(process.env.PORT ?? 3000),[m
+   clientOrigin: process.env.CLIENT_ORIGIN ?? "*",[m
+   wsPath: process.env.WS_PATH ?? "/ws",[m
+[31m-  smtpHost: process.env.SMTP_HOST,[m
+[31m-  smtpPort: Number(process.env.SMTP_PORT ?? 587),[m
+[31m-  smtpSecure: process.env.SMTP_SECURE === "true",[m
+   smtpUser: process.env.SMTP_USER,[m
+   smtpPassword: process.env.SMTP_PASSWORD,[m
+[31m-  smtpFrom: process.env.SMTP_FROM,[m
+[31m-  resendApiKey: process.env.RESEND_API_KEY,[m
+[31m-  resendFrom: process.env.RESEND_FROM,[m
+[32m+[m[32m  smtpFrom: process.env.SMTP_FROM ?? process.env.SMTP_USER,[m
+ };[m
+[1mdiff --git a/server/src/controllers/enrollmentController.ts b/server/src/controllers/enrollmentController.ts[m
+[1mindex 05e22ca..e2ce270 100644[m
+[1m--- a/server/src/controllers/enrollmentController.ts[m
+[1m+++ b/server/src/controllers/enrollmentController.ts[m
+[36m@@ -13,7 +13,7 @@[m [mexport async function getEnrollments(req: Request, res: Response, next: NextFunc[m
+ [m
+ export async function postEnrollment(req: Request, res: Response, next: NextFunction): Promise<void> {[m
+   try {[m
+[31m-    const enrollment = await enrollStudent(req.user!.userId, req.body.courseCode);[m
+[32m+[m[32m    const enrollment = await enrollStudent(req.user!.userId, req.body.joinCode);[m
+     sendSuccess(res, enrollment, 201);[m
+   } catch (error) {[m
+     next(error);[m
+[1mdiff --git a/server/src/routes/enrollmentRoutes.ts b/server/src/routes/enrollmentRoutes.ts[m
+[1mindex 19fd62a..9ab5eb5 100644[m
+[1m--- a/server/src/routes/enrollmentRoutes.ts[m
+[1m+++ b/server/src/routes/enrollmentRoutes.ts[m
+[36m@@ -10,7 +10,7 @@[m [mrouter.use(authMiddleware);[m
+ router.get("/", getEnrollments);[m
+ router.post([m
+   "/",[m
+[31m-  validateBody(z.object({ courseCode: z.string().trim().min(1).max(40) })),[m
+[32m+[m[32m  validateBody(z.object({ joinCode: z.string().trim().regex(/^\d{6}$/, "Join code must be 6 digits") })),[m
+   postEnrollment[m
+ );[m
+ [m
+[1mdiff --git a/server/src/services/admissionService.ts b/server/src/services/admissionService.ts[m
+[1mindex 8c2a1c9..4f82f9d 100644[m
+[1m--- a/server/src/services/admissionService.ts[m
+[1m+++ b/server/src/services/admissionService.ts[m
+[36m@@ -1,5 +1,6 @@[m
+ import { prisma } from "../config/prisma";[m
+ import { HttpError } from "../middleware/errorHandler";[m
+[32m+[m[32mimport { randomInt } from "crypto";[m
+ [m
+ const fees = { enrollment: 1500, other: 500 };[m
+ [m
+[36m@@ -17,7 +18,39 @@[m [mexport async function listSections() {[m
+ [m
+ export async function createSection(userId: string, input: { code: string; course: string; yearLevel: number; semester: string; subjects: { code: string; title: string; units: number; dayOfWeek: number; startTime: string; endTime: string }[] }) {[m
+   await requireRole(userId, "ADMIN");[m
+[31m-  return prisma.courseSection.create({ data: { ...input, createdById: userId, subjects: { create: input.subjects } }, include: { subjects: true } });[m
+[32m+[m[32m  let joinCodes: string[] = [];[m
+[32m+[m[32m  for (let attempt = 0; attempt < 5; attempt += 1) {[m
+[32m+[m[32m    const candidateCodes = new Set<string>();[m
+[32m+[m[32m    while (candidateCodes.size < input.subjects.length) {[m
+[32m+[m[32m      candidateCodes.add(randomInt(100_000, 1_000_000).toString());[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    const existingCodes = await prisma.subject.findMany({[m
+[32m+[m[32m      where: { joinCode: { in: [...candidateCodes] } },[m
+[32m+[m[32m      select: { joinCode: true },[m
+[32m+[m[32m    });[m
+[32m+[m[32m    if (existingCodes.length === 0) {[m
+[32m+[m[32m      joinCodes = [...candidateCodes];[m
+[32m+[m[32m      break;[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+[32m+[m[32m  if (joinCodes.length !== input.subjects.length) {[m
+[32m+[m[32m    throw new HttpError(503, "Could not generate unique subject join codes. Please try again.");[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  return prisma.courseSection.create({[m
+[32m+[m[32m    data: {[m
+[32m+[m[32m      ...input,[m
+[32m+[m[32m      createdById: userId,[m
+[32m+[m[32m      subjects: {[m
+[32m+[m[32m        create: input.subjects.map((subject, index) => ({[m
+[32m+[m[32m          ...subject,[m
+[32m+[m[32m          joinCode: joinCodes[index],[m
+[32m+[m[32m        })),[m
+[32m+[m[32m      },[m
+[32m+[m[32m    },[m
+[32m+[m[32m    include: { subjects: true },[m
+[32m+[m[32m  });[m
+ }[m
+ [m
+ export async function getMyAdmission(studentId: string) {[m
+[1mdiff --git a/server/src/services/emailService.ts b/server/src/services/emailService.ts[m
+[1mindex da6db39..75b88d9 100644[m
+[1m--- a/server/src/services/emailService.ts[m
+[1m+++ b/server/src/services/emailService.ts[m
+[36m@@ -3,42 +3,16 @@[m [mimport { env } from "../config/env";[m
+ import { HttpError } from "../middleware/errorHandler";[m
+ [m
+ async function sendEmail(to: string, subject: string, text: string, html: string): Promise<void> {[m
+[31m-  if (env.resendApiKey) {[m
+[31m-    if (!env.resendFrom) {[m
+[31m-      throw new HttpError(503, "RESEND_FROM is not configured on the server");[m
+[31m-    }[m
+[31m-[m
+[31m-    let response: Response;[m
+[31m-    try {[m
+[31m-      response = await fetch("https://api.resend.com/emails", {[m
+[31m-        method: "POST",[m
+[31m-        headers: {[m
+[31m-          Authorization: `Bearer ${env.resendApiKey}`,[m
+[31m-          "Content-Type": "application/json",[m
+[31m-        },[m
+[31m-        body: JSON.stringify({ from: env.resendFrom, to: [to], subject, text, html }),[m
+[31m-        signal: AbortSignal.timeout(10_000),[m
+[31m-      });[m
+[31m-    } catch {[m
+[31m-      throw new HttpError(502, "Email provider timed out or could not be reached");[m
+[31m-    }[m
+[31m-[m
+[31m-    if (!response.ok) {[m
+[31m-      console.error("Resend email request failed with status", response.status);[m
+[31m-      throw new HttpError(502, "Email provider could not send the message");[m
+[31m-    }[m
+[31m-    return;[m
+[31m-  }[m
+[31m-[m
+[31m-  if (!env.smtpHost || !env.smtpFrom) {[m
+[31m-    throw new HttpError(503, "Email delivery is not configured on the server");[m
+[32m+[m[32m  if (!env.smtpUser || !env.smtpPassword || !env.smtpFrom) {[m
+[32m+[m[32m    throw new HttpError(503, "Gmail SMTP is not configured. Set SMTP_USER and SMTP_PASSWORD on the server.");[m
+   }[m
+ [m
+   const transporter = nodemailer.createTransport({[m
+[31m-    host: env.smtpHost,[m
+[31m-    port: env.smtpPort,[m
+[31m-    secure: env.smtpSecure,[m
+[31m-    auth: env.smtpUser && env.smtpPassword ? { user: env.smtpUser, pass: env.smtpPassword } : undefined,[m
+[32m+[m[32m    host: "smtp.gmail.com",[m
+[32m+[m[32m    port: 587,[m
+[32m+[m[32m    secure: false,[m
+[32m+[m[32m    requireTLS: true,[m
+[32m+[m[32m    auth: { user: env.smtpUser, pass: env.smtpPassword },[m
+     connectionTimeout: 10_000,[m
+     greetingTimeout: 10_000,[m
+     socketTimeout: 15_000,[m
+[36m@@ -69,4 +43,4 @@[m [mexport async function sendTemporaryPassword(email: string, password: string): Pr[m
+     `Your temporary password is ${password}. Sign in with it and change your password immediately.`,[m
+     `<p>Your temporary password is:</p><p style="font-size:18px;font-weight:bold">${password}</p><p>Sign in with it and change your password immediately.</p>`[m
+   );[m
+[31m-}[m
+\ No newline at end of file[m
+[32m+[m[32m}[m
+[1mdiff --git a/server/src/services/enrollmentService.ts b/server/src/services/enrollmentService.ts[m
+[1mindex d5057f2..8860d4b 100644[m
+[1m--- a/server/src/services/enrollmentService.ts[m
+[1m+++ b/server/src/services/enrollmentService.ts[m
+[36m@@ -1,9 +1,16 @@[m
+ import { prisma } from "../config/prisma";[m
+ import { HttpError } from "../middleware/errorHandler";[m
+ [m
+[31m-function normalizeCourseCode(courseCode: string): string {[m
+[31m-  return courseCode.trim().toUpperCase();[m
+[31m-}[m
+[32m+[m[32mconst enrolledSubjectSelection = {[m
+[32m+[m[32m  id: true,[m
+[32m+[m[32m  code: true,[m
+[32m+[m[32m  joinCode: true,[m
+[32m+[m[32m  title: true,[m
+[32m+[m[32m  dayOfWeek: true,[m
+[32m+[m[32m  startTime: true,[m
+[32m+[m[32m  endTime: true,[m
+[32m+[m[32m  section: { select: { course: true, code: true } },[m
+[32m+[m[32m} as const;[m
+ [m
+ async function requireStudent(userId: string): Promise<void> {[m
+   const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });[m
+[36m@@ -14,25 +21,78 @@[m [masync function requireStudent(userId: string): Promise<void> {[m
+ [m
+ export async function listEnrollments(studentId: string) {[m
+   await requireStudent(studentId);[m
+[31m-  return prisma.enrollment.findMany({[m
+[31m-    where: { studentId },[m
+[31m-    orderBy: { createdAt: "desc" },[m
+[31m-    select: { id: true, courseCode: true, createdAt: true },[m
+[32m+[m[32m  const [enrollments, admission] = await Promise.all([[m
+[32m+[m[32m    prisma.enrollment.findMany({[m
+[32m+[m[32m      where: { studentId },[m
+[32m+[m[32m      orderBy: { createdAt: "desc" },[m
+[32m+[m[32m      select: { id: true, courseCode: true, createdAt: true },[m
+[32m+[m[32m    }),[m
+[32m+[m[32m    prisma.admission.findFirst({[m
+[32m+[m[32m      where: { studentId, status: { not: "REJECTED" } },[m
+[32m+[m[32m      orderBy: { createdAt: "desc" },[m
+[32m+[m[32m      select: { subjects: { select: { subject: { select: { code: true, joinCode: true } } } } },[m
+[32m+[m[32m    }),[m
+[32m+[m[32m  ]);[m
+[32m+[m
+[32m+[m[32m  const mappedEnrollments = enrollments.map((enrollment) => {[m
+[32m+[m[32m    const admissionSubject = admission?.subjects.find([m
+[32m+[m[32m      ({ subject }) => subject.code === enrollment.courseCode || subject.joinCode === enrollment.courseCode[m
+[32m+[m[32m    );[m
+[32m+[m[32m    return { ...enrollment, courseCode: admissionSubject?.subject.joinCode ?? enrollment.courseCode };[m
+   });[m
+[32m+[m[32m  const unmatchedLegacyCodes = [...new Set([m
+[32m+[m[32m    mappedEnrollments[m
+[32m+[m[32m      .filter((enrollment) => !/^\d{6}$/.test(enrollment.courseCode))[m
+[32m+[m[32m      .map((enrollment) => enrollment.courseCode)[m
+[32m+[m[32m  )];[m
+[32m+[m[32m  const joinCodesByLegacyCode = new Map<string, string | null>();[m
+[32m+[m[32m  if (unmatchedLegacyCodes.length > 0) {[m
+[32m+[m[32m    const legacySubjects = await prisma.subject.findMany({[m
+[32m+[m[32m      where: { code: { in: unmatchedLegacyCodes } },[m
+[32m+[m[32m      select: { code: true, joinCode: true },[m
+[32m+[m[32m    });[m
+[32m+[m[32m    for (const legacyCode of unmatchedLegacyCodes) {[m
+[32m+[m[32m      const matches = legacySubjects.filter((subject) => subject.code === legacyCode);[m
+[32m+[m[32m      joinCodesByLegacyCode.set(legacyCode, matches.length === 1 ? matches[0].joinCode : null);[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  const resolvedEnrollments = mappedEnrollments.map((enrollment) => ({[m
+[32m+[m[32m    ...enrollment,[m
+[32m+[m[32m    courseCode: joinCodesByLegacyCode.get(enrollment.courseCode) ?? enrollment.courseCode,[m
+[32m+[m[32m  }));[m
+[32m+[m[32m  const subjects = await prisma.subject.findMany({[m
+[32m+[m[32m    where: { joinCode: { in: resolvedEnrollments.map(({ courseCode }) => courseCode) } },[m
+[32m+[m[32m    select: enrolledSubjectSelection,[m
+[32m+[m[32m  });[m
+[32m+[m[32m  const subjectsByJoinCode = new Map(subjects.map((subject) => [subject.joinCode, subject]));[m
+[32m+[m
+[32m+[m[32m  return resolvedEnrollments.map((enrollment) => ({[m
+[32m+[m[32m    ...enrollment,[m
+[32m+[m[32m    subject: subjectsByJoinCode.get(enrollment.courseCode) ?? null,[m
+[32m+[m[32m  }));[m
+ }[m
+ [m
+[31m-export async function enrollStudent(studentId: string, courseCode: string) {[m
+[32m+[m[32mexport async function enrollStudent(studentId: string, joinCodeInput: string) {[m
+   await requireStudent(studentId);[m
+[31m-  const normalizedCourseCode = normalizeCourseCode(courseCode);[m
+[32m+[m[32m  const joinCode = joinCodeInput.trim();[m
+[32m+[m[32m  const subject = await prisma.subject.findUnique({[m
+[32m+[m[32m    where: { joinCode },[m
+[32m+[m[32m    select: enrolledSubjectSelection,[m
+[32m+[m[32m  });[m
+[32m+[m[32m  if (!subject) {[m
+[32m+[m[32m    throw new HttpError(404, "Subject not found. Check the 6-digit join code and try again.");[m
+[32m+[m[32m  }[m
+ [m
+   try {[m
+[31m-    return await prisma.enrollment.create({[m
+[31m-      data: { studentId, courseCode: normalizedCourseCode },[m
+[32m+[m[32m    const enrollment = await prisma.enrollment.create({[m
+[32m+[m[32m      data: { studentId, courseCode: joinCode },[m
+       select: { id: true, courseCode: true, createdAt: true },[m
+     });[m
+[32m+[m[32m    return { ...enrollment, subject };[m
+   } catch (error) {[m
+     if (error instanceof Error && error.message.includes("enrollments_studentId_courseCode_key")) {[m
+[31m-      throw new HttpError(409, "You are already enrolled in this course");[m
+[32m+[m[32m      throw new HttpError(409, "You are already enrolled in this subject");[m
+     }[m
+     throw error;[m
+   }[m

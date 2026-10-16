@@ -27,3 +27,13 @@ export async function getUserById(userId: string) {
 
   return { ...user, online: isUserOnline(user.id) };
 }
+
+export async function listTeacherUsers(adminId: string) {
+  const admin = await prisma.user.findUnique({ where: { id: adminId }, select: { role: true } });
+  if (admin?.role !== "ADMIN") throw new HttpError(403, "Only admins can view teacher accounts");
+  return prisma.user.findMany({
+    where: { role: "TEACHER" },
+    select: { id: true, username: true, email: true },
+    orderBy: { username: "asc" },
+  });
+}

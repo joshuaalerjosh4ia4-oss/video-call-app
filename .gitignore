@@ -20,5 +20,6 @@ mobile/.env
 
 .env
 .env.example
+!server/.env.example
 .vscode
 docker-compose.yml

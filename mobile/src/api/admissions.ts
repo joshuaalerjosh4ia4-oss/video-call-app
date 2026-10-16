@@ -34,3 +34,10 @@ export function updateAdminAdmission(id: string, paymentStatus: "UNPAID" | "PAID
 export function createCourseSection(input: { code: string; course: string; yearLevel: number; semester: string; subjects: { code: string; title: string; units: number; dayOfWeek: number; startTime: string; endTime: string }[] }) {
   return apiClient.post<CourseSection>("/api/admissions/sections", input);
 }
+
+export function assignTeacherToSection(sectionId: string, teacherId: string | null) {
+  return apiClient.patch<Pick<CourseSection, "id" | "code" | "course" | "teacherId" | "teacher">>(
+    `/api/admissions/admin/sections/${encodeURIComponent(sectionId)}/teacher`,
+    { teacherId }
+  );
+}

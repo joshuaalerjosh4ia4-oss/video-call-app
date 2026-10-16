@@ -11,5 +11,7 @@ export type RootStackParamList = {
   Enrollment: undefined;
   AdminAdmissions: undefined;
   AdminSectionCreate: undefined;
+  AdminTeachers: undefined;
+  AdminSectionAssignments: undefined;
   Ledger: undefined;
 };

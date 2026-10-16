@@ -30,20 +30,56 @@ export interface SavedRoom {
   passcode: string;
 }
 
+export interface ScheduledRoom {
+  id: string;
+  passcode: string;
+  startsAt: string;
+  endsAt: string;
+  subject: {
+    id: string;
+    code: string;
+    title: string;
+    section: { course: string; code: string };
+  };
+}
+
 export interface EnrolledSubject {
   id: string;
   code: string;
+  subjectId?: string;
+  title?: string;
+  course?: string;
+  sectionCode?: string;
+  dayOfWeek?: number;
+  startTime?: string;
+  endTime?: string;
+}
+
+export interface SubjectPeopleMember {
+  id: string;
+  username: string;
 }
 
 export interface Enrollment {
   id: string;
   courseCode: string;
   createdAt?: string;
+  subject?: {
+    id: string;
+    code: string;
+    joinCode?: string;
+    title: string;
+    dayOfWeek: number;
+    startTime: string;
+    endTime: string;
+    section: { course: string; code: string };
+  } | null;
 }
 
 export interface AdmissionSubject {
   id: string;
   code: string;
+  joinCode?: string;
   title: string;
   units: number;
   schedule?: "morning" | "afternoon" | "evening";
@@ -58,7 +94,15 @@ export interface CourseSection {
   course: string;
   yearLevel: number;
   semester: string;
+  teacherId?: string | null;
+  teacher?: { id: string; username: string } | null;
   subjects: AdmissionSubject[];
+}
+
+export interface TeacherAccount {
+  id: string;
+  username: string;
+  email: string;
 }
 
 export interface Admission {

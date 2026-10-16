@@ -14,6 +14,8 @@ import MainScreen from "../screens/MainScreen";
 import EnrollmentScreen from "../screens/EnrollmentScreen";
 import AdminAdmissionsScreen from "../screens/AdminAdmissionsScreen";
 import AdminSectionCreateScreen from "../screens/AdminSectionCreateScreen";
+import AdminTeachersScreen from "../screens/AdminTeachersScreen";
+import AdminSectionAssignmentsScreen from "../screens/AdminSectionAssignmentsScreen";
 import LedgerScreen from "../screens/LedgerScreen";
 import { useAuthContext } from "../context/AuthContext";
 
@@ -51,6 +53,8 @@ export default function RootNavigator() {
         <Stack.Screen name="Enrollment" component={EnrollmentScreen} />
         <Stack.Screen name="AdminAdmissions" component={AdminAdmissionsScreen} />
         <Stack.Screen name="AdminSectionCreate" component={AdminSectionCreateScreen} />
+        <Stack.Screen name="AdminTeachers" component={AdminTeachersScreen} />
+        <Stack.Screen name="AdminSectionAssignments" component={AdminSectionAssignmentsScreen} />
         <Stack.Screen name="Ledger" component={LedgerScreen} />
       </Stack.Navigator>
     </NavigationContainer>

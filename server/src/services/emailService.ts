@@ -3,42 +3,16 @@ import { env } from "../config/env";
 import { HttpError } from "../middleware/errorHandler";
 
 async function sendEmail(to: string, subject: string, text: string, html: string): Promise<void> {
-  if (env.resendApiKey) {
-    if (!env.resendFrom) {
-      throw new HttpError(503, "RESEND_FROM is not configured on the server");
-    }
-
-    let response: Response;
-    try {
-      response = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${env.resendApiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ from: env.resendFrom, to: [to], subject, text, html }),
-        signal: AbortSignal.timeout(10_000),
-      });
-    } catch {
-      throw new HttpError(502, "Email provider timed out or could not be reached");
-    }
-
-    if (!response.ok) {
-      console.error("Resend email request failed with status", response.status);
-      throw new HttpError(502, "Email provider could not send the message");
-    }
-    return;
-  }
-
-  if (!env.smtpHost || !env.smtpFrom) {
-    throw new HttpError(503, "Email delivery is not configured on the server");
+  if (!env.smtpUser || !env.smtpPassword || !env.smtpFrom) {
+    throw new HttpError(503, "Gmail SMTP is not configured. Set SMTP_USER and SMTP_PASSWORD on the server.");
   }
 
   const transporter = nodemailer.createTransport({
-    host: env.smtpHost,
-    port: env.smtpPort,
-    secure: env.smtpSecure,
-    auth: env.smtpUser && env.smtpPassword ? { user: env.smtpUser, pass: env.smtpPassword } : undefined,
+    host: "smtp.gmail.com",
+    port: 587,
+    secure: false,
+    requireTLS: true,
+    auth: { user: env.smtpUser, pass: env.smtpPassword },
     connectionTimeout: 10_000,
     greetingTimeout: 10_000,
     socketTimeout: 15_000,

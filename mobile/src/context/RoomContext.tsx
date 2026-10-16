@@ -18,7 +18,6 @@ interface RoomContextValue {
   localStream: MediaStream | null;
   remoteStreams: Map<string, MediaStream>;
   error: string | null;
-  createRoom: (startsAt: string, endsAt: string) => { roomId: string; passcode: string };
   joinRoom: (roomId: string, passcode: string) => void;
   leaveRoom: () => void;
   clearError: () => void;
@@ -35,14 +34,6 @@ interface RoomContextValue {
 }
 
 const RoomContext = createContext<RoomContextValue | undefined>(undefined);
-
-function makeRoomId(): string {
-  return String(Math.floor(100000000 + Math.random() * 900000000));
-}
-
-function makePasscode(): string {
-  return String(Math.floor(100000 + Math.random() * 900000));
-}
 
 export function RoomProvider({ children }: { children: React.ReactNode }) {
   const { service } = useWebSocketContext();
@@ -132,23 +123,6 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
     localStreamRequestRef.current = request;
     return request;
   }, []);
-
-  const createRoom = useCallback((startsAt: string, endsAt: string) => {
-    const id = makeRoomId();
-    const code = makePasscode();
-    closePeers();
-    setRoomId(id);
-    roomRef.current = id;
-    service.send({ type: "room-create", roomId: id, passcode: code, startsAt, endsAt });
-    void prepareLocalStream().catch(() => setError("Camera and microphone access is required to join a room."));
-    void saveMeetingRecord({
-      id: `${id}-${Date.now()}`,
-      roomId: id,
-      type: "created",
-      createdAt: new Date().toISOString(),
-    });
-    return { roomId: id, passcode: code };
-  }, [closePeers, prepareLocalStream, service]);
 
   const joinRoom = useCallback(
     (id: string, code: string) => {
@@ -356,7 +330,6 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
         localStream,
         remoteStreams,
         error,
-        createRoom,
         joinRoom,
         leaveRoom,
         clearError: () => setError(null),

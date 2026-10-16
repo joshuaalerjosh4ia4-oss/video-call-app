@@ -18,6 +18,13 @@ const menuItems: { label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
 
 export default function AccountScreen({ navigation, onSelectSubjects }: Props) {
   const { user, logout } = useAuthContext();
+  const accountMenuItems = user?.role === "ADMIN"
+    ? [
+        ...menuItems,
+        { label: "Create Teacher Account", icon: "person-add-outline" as const },
+        { label: "Assign Sections to Teachers", icon: "people-outline" as const },
+      ]
+    : menuItems;
 
   async function handleLogout() {
     await logout();
@@ -33,7 +40,7 @@ export default function AccountScreen({ navigation, onSelectSubjects }: Props) {
         <Text className="mt-1 text-sm text-app-muted-2">{user?.email}</Text>
       </View>
       <View className="mt-6 overflow-hidden rounded-2xl bg-app-surface">
-        {menuItems.map((item, index) => (
+        {accountMenuItems.map((item, index) => (
           <TouchableOpacity
             key={item.label}
             accessibilityRole="button"
@@ -45,6 +52,10 @@ export default function AccountScreen({ navigation, onSelectSubjects }: Props) {
                 navigation.navigate(user?.role === "ADMIN" ? "AdminAdmissions" : "Enrollment");
               } else if (item.label === "Ledger") {
                 navigation.navigate("Ledger");
+              } else if (item.label === "Create Teacher Account") {
+                navigation.navigate("AdminTeachers");
+              } else if (item.label === "Assign Sections to Teachers") {
+                navigation.navigate("AdminSectionAssignments");
               } else {
                 Alert.alert(item.label, "This section is not available yet.");
               }

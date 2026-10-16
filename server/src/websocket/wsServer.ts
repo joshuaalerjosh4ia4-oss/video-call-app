@@ -158,15 +158,12 @@ function broadcastPresence(wss: WebSocketServer, userId: string, type: "user-onl
 async function handleClientMessage(socket: AuthenticatedSocket, message: ClientToServerMessage): Promise<void> {
   if (!socket.userId || !socket.username || !socket.role) return;
 
-  if (message.type === "room-create" || message.type === "room-join") {
-    await joinRoom(
-      socket,
-      message.roomId,
-      message.passcode,
-      message.type === "room-create",
-      message.type === "room-create" ? message.startsAt : undefined,
-      message.type === "room-create" ? message.endsAt : undefined
-    );
+  if (message.type === "room-create") {
+    send(socket, { type: "error", message: "Schedule a subject room from the Rooms tab before joining it." });
+    return;
+  }
+  if (message.type === "room-join") {
+    await joinRoom(socket, message.roomId, message.passcode);
     return;
   }
   if (message.type === "room-leave") {
@@ -236,10 +233,7 @@ function participants(room: Map<string, { socket: AuthenticatedSocket; username:
 async function joinRoom(
   socket: AuthenticatedSocket,
   roomId: string,
-  passcode: string,
-  creating: boolean,
-  startsAt?: string,
-  endsAt?: string
+  passcode: string
 ): Promise<void> {
   const normalizedRoomId = roomId.trim().toUpperCase();
   const normalizedPasscode = passcode.trim();
@@ -259,56 +253,59 @@ async function joinRoom(
     let room = rooms.get(normalizedRoomId);
     const storedRoom = await prisma.room.findUnique({ where: { id: normalizedRoomId } });
 
-    if (creating) {
-      if (room || storedRoom) {
-        send(socket, { type: "error", message: "That room already exists" });
+    if (storedRoom && storedRoom.passcode !== normalizedPasscode) {
+      send(socket, { type: "error", message: "Incorrect meeting passcode" });
+      return;
+    }
+    if (!storedRoom) {
+      send(socket, { type: "error", message: "Room not found. Check the room code and try again." });
+      return;
+    }
+    const now = new Date();
+    if (storedRoom.startsAt && now < storedRoom.startsAt) {
+      send(socket, { type: "error", message: `This room opens at ${storedRoom.startsAt.toLocaleTimeString()}` });
+      return;
+    }
+    if (storedRoom.endsAt && now > storedRoom.endsAt) {
+      send(socket, { type: "error", message: "This room's joining window has ended" });
+      return;
+    }
+    if (storedRoom.subjectId) {
+      let canJoin = false;
+      if (socket.role === "TEACHER" && storedRoom.ownerId === socket.userId) {
+        const subject = await prisma.subject.findUnique({
+          where: { id: storedRoom.subjectId },
+          select: { section: { select: { teacherId: true } } },
+        });
+        canJoin = subject?.section.teacherId === socket.userId;
+      }
+      if (socket.role === "STUDENT") {
+        const personalCodes = await prisma.admissionSubject.findMany({
+          where: {
+            subjectId: storedRoom.subjectId,
+            admission: { studentId: socket.userId, status: "FINALIZED" },
+          },
+          select: { joinCode: true },
+        });
+        const courseCodes = [storedRoom.subjectId, ...personalCodes.map(({ joinCode }) => joinCode)];
+        const enrollment = await prisma.enrollment.findFirst({
+          where: { studentId: socket.userId, courseCode: { in: courseCodes } },
+          select: { id: true },
+        });
+        if (!enrollment) {
+          canJoin = false;
+        } else {
+          canJoin = true;
+        }
+      }
+      if (!canJoin) {
+        send(socket, { type: "error", message: "Only the room's teacher or a student enrolled in its subject can join." });
         return;
       }
-      const parsedStartsAt = startsAt ? new Date(startsAt) : null;
-      const parsedEndsAt = endsAt ? new Date(endsAt) : null;
-      if (
-        !parsedStartsAt ||
-        !parsedEndsAt ||
-        Number.isNaN(parsedStartsAt.getTime()) ||
-        Number.isNaN(parsedEndsAt.getTime()) ||
-        parsedStartsAt >= parsedEndsAt
-      ) {
-        send(socket, { type: "error", message: "A valid room start and end time are required" });
-        return;
-      }
-      await prisma.room.create({
-        data: {
-          id: normalizedRoomId,
-          passcode: normalizedPasscode,
-          ownerId: socket.userId,
-          startsAt: parsedStartsAt,
-          endsAt: parsedEndsAt,
-        },
-      });
-      room = { passcode: normalizedPasscode, members: new Map() };
+    }
+    if (!room) {
+      room = { passcode: storedRoom.passcode, members: new Map() };
       rooms.set(normalizedRoomId, room);
-    } else {
-      if (storedRoom && storedRoom.passcode !== normalizedPasscode) {
-        send(socket, { type: "error", message: "Incorrect meeting passcode" });
-        return;
-      }
-      if (!storedRoom) {
-        send(socket, { type: "error", message: "Room not found. Check the room code and try again." });
-        return;
-      }
-      const now = new Date();
-      if (storedRoom.startsAt && now < storedRoom.startsAt) {
-        send(socket, { type: "error", message: `This room opens at ${storedRoom.startsAt.toLocaleTimeString()}` });
-        return;
-      }
-      if (storedRoom.endsAt && now > storedRoom.endsAt) {
-        send(socket, { type: "error", message: "This room's joining window has ended" });
-        return;
-      }
-      if (!room) {
-        room = { passcode: storedRoom.passcode, members: new Map() };
-        rooms.set(normalizedRoomId, room);
-      }
     }
 
     if (room.passcode !== normalizedPasscode) {
@@ -327,7 +324,7 @@ async function joinRoom(
     room.members.set(socket.userId, { socket, username: socket.username });
     const participantCount = room.members.size;
     send(socket, {
-      type: creating ? "room-created" : "room-joined",
+      type: "room-joined",
       roomId: normalizedRoomId,
       participants: participants(room.members).filter((participant) => participant.userId !== socket.userId),
       participantCount,
@@ -343,7 +340,7 @@ async function joinRoom(
       }
     });
   } catch (error) {
-    console.error(`[ws] failed to ${creating ? "create" : "join"} room ${normalizedRoomId}`, error);
+    console.error(`[ws] failed to join room ${normalizedRoomId}`, error);
     send(socket, { type: "error", message: "Could not access the meeting. Please try again." });
   }
 }

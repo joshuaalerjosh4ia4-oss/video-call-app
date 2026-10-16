@@ -57,6 +57,7 @@ model User {
   rooms        Room[]
   enrollments  Enrollment[]
   sections     CourseSection[]
+  teachingSections CourseSection[] @relation("TeachingSections")
   admissions   Admission[]
   emailVerificationCode EmailVerificationCode?
 
@@ -79,13 +80,16 @@ model Room {
   id        String    @id
   passcode  String
   ownerId   String?
+  subjectId String?
   startsAt  DateTime?
   endsAt    DateTime?
   owner     User?     @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  subject   Subject?  @relation(fields: [subjectId], references: [id], onDelete: SetNull)
   createdAt DateTime  @default(now())
 
   @@index([createdAt])
   @@index([ownerId])
+  @@index([subjectId, startsAt, endsAt])
   @@map("rooms")
 }
 
@@ -108,12 +112,15 @@ model CourseSection {
   yearLevel   Int
   semester    String
   createdById  String
+  teacherId    String?
   createdBy    User         @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  teacher      User?        @relation("TeachingSections", fields: [teacherId], references: [id], onDelete: SetNull)
   subjects    Subject[]
   admissions  Admission[]
   createdAt   DateTime     @default(now())
 
   @@index([course, semester, yearLevel])
+  @@index([teacherId])
   @@map("course_sections")
 }
 
@@ -128,6 +135,7 @@ model Subject {
   sectionId  String
   section    CourseSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
   admissions AdmissionSubject[]
+  rooms      Room[]
   createdAt DateTime      @default(now())
 
   @@unique([sectionId, code])
@@ -161,6 +169,7 @@ model Admission {
 model AdmissionSubject {
   admissionId String
   subjectId   String
+  joinCode    String    @unique
   schedule    String
   admission   Admission @relation(fields: [admissionId], references: [id], onDelete: Cascade)
   subject     Subject   @relation(fields: [subjectId], references: [id], onDelete: Restrict)
@@ -168,4 +177,3 @@ model AdmissionSubject {
   @@id([admissionId, subjectId])
   @@map("admission_subjects")
 }
-

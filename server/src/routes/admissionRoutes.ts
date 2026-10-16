@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { adminList, adminUpdate, create, mine, sections, submit } from "../controllers/admissionController";
+import { adminList, adminUpdate, assignTeacher, create, mine, sections, submit } from "../controllers/admissionController";
 import { authMiddleware } from "../middleware/auth";
 import { validateBody } from "../middleware/validate";
 
@@ -27,4 +27,5 @@ router.get("/mine", mine);
 router.post("/submit", validateBody(z.object({ sectionId: z.string().uuid(), subjectSelections: z.array(z.object({ subjectId: z.string().uuid(), schedule: z.enum(["morning", "afternoon", "evening"]) })).min(1) })), submit);
 router.get("/admin", adminList);
 router.patch("/admin/:id", validateBody(z.object({ paymentStatus: z.enum(["UNPAID", "PAID"]), finalize: z.boolean() })), adminUpdate);
+router.patch("/admin/sections/:id/teacher", validateBody(z.object({ teacherId: z.string().uuid().nullable() })), assignTeacher);
 export default router;

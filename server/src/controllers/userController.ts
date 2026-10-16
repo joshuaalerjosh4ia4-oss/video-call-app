@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { listUsersExcept, getUserById } from "../services/userService";
+import { listUsersExcept, getUserById, listTeacherUsers } from "../services/userService";
 import { sendSuccess } from "../utils/response";
 
 export async function listUsers(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -15,6 +15,14 @@ export async function getUser(req: Request, res: Response, next: NextFunction): 
   try {
     const user = await getUserById(req.params.id);
     sendSuccess(res, user, 200);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getTeachers(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    sendSuccess(res, await listTeacherUsers(req.user!.userId), 200);
   } catch (err) {
     next(err);
   }

@@ -81,6 +81,22 @@ export default function EnrollmentScreen({ navigation }: Props) {
           <View className="mt-5 border-t border-app-border pt-4">
             <Text className="font-bold text-app-text">{admission.section.course} · {admission.section.code}</Text>
             <Text className="mt-1 text-sm text-app-muted-2">{admission.section.semester} · Admission: {admission.status}</Text>
+            {admission.status === "FINALIZED" ? (
+              <>
+                <Text className="mt-4 text-sm font-semibold text-app-text">Your personal subject join codes</Text>
+                <Text className="mt-1 text-xs text-app-muted-2">We emailed these codes to you. They only work with your student account.</Text>
+                {admission.subjects?.map(({ subject }) => (
+                  <View key={subject.id} className="mt-3 flex-row items-center justify-between rounded-lg bg-app-surface-alt px-3 py-2">
+                    <Text className="mr-3 flex-1 text-sm text-app-text">{subject.title}</Text>
+                    <Text className="font-bold tracking-widest text-app-primary">{subject.joinCode}</Text>
+                  </View>
+                ))}
+              </>
+            ) : (
+              <Text className="mt-4 text-sm text-app-muted-2">
+                Your subject join codes will be emailed after the admin finalizes your admission.
+              </Text>
+            )}
           </View>
           <TouchableOpacity className="mt-5 items-center rounded-xl bg-app-primary py-3" onPress={() => navigation.navigate("Ledger")}>
             <Text className="font-bold text-white">View Ledger</Text>
