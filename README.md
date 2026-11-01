@@ -200,5 +200,6 @@ passwords, private keys, or other secrets in them.
 
 ## License
 
-No license file is currently included. All rights remain with the copyright
-holder unless a license is added.
+This project is public for viewing only. No permission is granted to copy,
+modify, distribute, or otherwise reuse this code. All rights are reserved by
+the copyright holder. Contact the copyright holder for permission.
