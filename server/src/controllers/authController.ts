@@ -10,6 +10,7 @@ import {
   verifyEmailCode,
 } from "../services/authService";
 import { sendSuccess } from "../utils/response";
+import { signWebSocketToken } from "../utils/jwt";
 
 export const registerSchema = z.object({
   username: z.string().trim().min(3, "Username must be at least 3 characters").max(30),
@@ -102,6 +103,15 @@ export async function me(req: Request, res: Response, next: NextFunction): Promi
   try {
     const user = await getCurrentUser(req.user!.userId);
     sendSuccess(res, user, 200);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function wsToken(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const token = signWebSocketToken({ userId: req.user!.userId, username: req.user!.username });
+    sendSuccess(res, { token }, 200);
   } catch (err) {
     next(err);
   }

@@ -18,6 +18,7 @@ import AdminTeachersScreen from "../screens/AdminTeachersScreen";
 import AdminSectionAssignmentsScreen from "../screens/AdminSectionAssignmentsScreen";
 import LedgerScreen from "../screens/LedgerScreen";
 import { useAuthContext } from "../context/AuthContext";
+import logoSplash from "../../assets/Logosplash.png";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -27,7 +28,7 @@ export default function RootNavigator() {
   if (isLoading) {
     return (
       <View className="flex-1 items-center justify-center bg-white">
-        <Image accessibilityLabel="MyClaSSes logo" className="h-52 w-72" resizeMode="contain" source={require("../../assets/Logosplash.png")} />
+        <Image accessibilityLabel="MyClaSSes logo" className="h-52 w-72" resizeMode="contain" source={logoSplash} />
         <View className="absolute bottom-20 items-center">
           <ActivityIndicator size="large" color="#563B68" />
           <Text className="mt-3 text-sm text-slate-600">Checking your session...</Text>

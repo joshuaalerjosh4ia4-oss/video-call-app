@@ -62,7 +62,7 @@ export default function RoomScreen({ navigation, route }: Props) {
           className="rounded-xl bg-app-surface-alt px-3 py-2"
           onPress={() => setShowRoomActions((visible) => !visible)}
         >
-          <Ionicons name="options" color="#fff" size={24} />
+          <Ionicons name="options" color="#563B68" size={24} />
         </TouchableOpacity>
       </View>
 
@@ -114,13 +114,6 @@ export default function RoomScreen({ navigation, route }: Props) {
             </Text>
           </View>
         )}
-        ListEmptyComponent={
-          <View className="items-center py-12">
-            <Text className="text-center text-app-muted-2">
-              Share the code to invite people to this room.
-            </Text>
-          </View>
-        }
       />
 
       <View className="relative mt-2">
@@ -131,7 +124,7 @@ export default function RoomScreen({ navigation, route }: Props) {
           >
             <Ionicons
               name={microphoneEnabled ? "mic-outline" : "mic-off-outline"}
-              color={microphoneEnabled ? "white" : "white"}
+              color="#563B68"
               size={24}
             />
           </TouchableOpacity>
@@ -141,7 +134,7 @@ export default function RoomScreen({ navigation, route }: Props) {
           >
             <Ionicons
               name={cameraEnabled ? "videocam-outline" : "videocam-off-outline"}
-              color={cameraEnabled ? "white" : "white"}
+              color="#563B68"
               size={24}
             />
           </TouchableOpacity>
@@ -150,8 +143,8 @@ export default function RoomScreen({ navigation, route }: Props) {
             onPress={() => void toggleScreenSharing()}
           >
             <MaterialIcons
-              name={screenSharing ? "ios-share" : "ios-share"}
-              color={screenSharing ? "white" : "white"}
+              name="ios-share"
+              color={screenSharing ? "white" : "#563B68"}
               size={24}
             />
           </TouchableOpacity>
@@ -159,19 +152,19 @@ export default function RoomScreen({ navigation, route }: Props) {
             className={`flex-1 items-center rounded-xl px-2 py-3 ${showParticipants ? "bg-app-primary" : "bg-app-surface-alt"}`}
             onPress={() => setShowParticipants((visible) => !visible)}
           >
-            <Ionicons name="people-outline" color="#fff" size={24} />
+            <Ionicons name="people-outline" color={showParticipants ? "white" : "#563B68"} size={24} />
           </TouchableOpacity>
           <TouchableOpacity
             className={`flex-1 items-center rounded-xl px-2 py-3 ${showReactions ? "bg-app-primary" : "bg-app-surface-alt"}`}
             onPress={() => setShowReactions((visible) => !visible)}
           >
-            <MaterialIcons name="add-reaction" color="#fff" size={24} />
+            <MaterialIcons name="add-reaction" color={showReactions ? "white" : "#563B68"} size={24} />
           </TouchableOpacity>
           <TouchableOpacity
             className={`flex-1 items-center rounded-xl px-2 py-3 ${showChat ? "bg-app-primary" : "bg-app-surface-alt"}`}
             onPress={() => setShowChat((visible) => !visible)}
           >
-            <Entypo name="chat" color="#fff" size={24} />
+            <Entypo name="chat" color={showChat ? "white" : "#563B68"} size={24} />
           </TouchableOpacity>
         </View>
         {showParticipants && (

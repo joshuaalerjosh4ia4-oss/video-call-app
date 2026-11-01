@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { MediaStream, mediaDevices } from "react-native-webrtc";
 import { useWebSocketContext } from "./WebSocketContext";
-import { RoomParticipant, IncomingSignal } from "../types/signaling";
+import { RoomParticipant, IncomingSignal, RTCIceCandidateInit } from "../types/signaling";
 import { WebRTCService } from "../webrtc/WebRTCService";
 import { saveMeetingRecord } from "../utils/storage";
 import { useAuthContext } from "./AuthContext";
@@ -56,12 +56,14 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
   const localStreamRequestRef = useRef<Promise<MediaStream> | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
+  const pendingIceCandidatesRef = useRef(new Map<string, RTCIceCandidateInit[]>());
   const roomRef = useRef(roomId);
   roomRef.current = roomId;
 
   const closePeers = useCallback(() => {
     peers.current.forEach(({ webrtc }) => webrtc.close());
     peers.current.clear();
+    pendingIceCandidatesRef.current.clear();
     localStreamRef.current?.getTracks().forEach((track) => track.stop());
     screenStreamRef.current = null;
     cameraStreamRef.current = null;
@@ -97,6 +99,9 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
         }
       });
       webrtc.createPeerConnection();
+      const pendingCandidates = pendingIceCandidatesRef.current.get(participant.userId) ?? [];
+      pendingIceCandidatesRef.current.delete(participant.userId);
+      for (const candidate of pendingCandidates) await webrtc.addIceCandidate(candidate);
       if (shouldOffer) {
         const offer = await webrtc.createOffer();
         service.send({ type: "room-offer", roomId: roomRef.current, targetUserId: participant.userId, offer });
@@ -309,11 +314,23 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       if (message.type === "room-answer" && message.roomId === roomRef.current) {
-        void peers.current.get(message.fromUserId)?.webrtc.setRemoteDescription(message.answer);
+        void peers.current
+          .get(message.fromUserId)
+          ?.webrtc.setRemoteDescription(message.answer)
+          .catch(() => setError("Could not complete the connection to a room participant."));
         return;
       }
       if (message.type === "room-ice-candidate" && message.roomId === roomRef.current) {
-        void peers.current.get(message.fromUserId)?.webrtc.addIceCandidate(message.candidate);
+        const peer = peers.current.get(message.fromUserId);
+        if (peer) {
+          void peer.webrtc
+            .addIceCandidate(message.candidate)
+            .catch(() => setError("Could not establish a network path to a room participant."));
+        } else {
+          const pending = pendingIceCandidatesRef.current.get(message.fromUserId) ?? [];
+          pending.push(message.candidate);
+          pendingIceCandidatesRef.current.set(message.fromUserId, pending);
+        }
       }
     });
     return unsubscribe;

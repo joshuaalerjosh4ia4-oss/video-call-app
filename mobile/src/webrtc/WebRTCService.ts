@@ -7,7 +7,7 @@ import {
   mediaDevices,
 } from "react-native-webrtc";
 import { PermissionsAndroid, Platform } from "react-native";
-import { RTC_CONFIGURATION, MEDIA_CONSTRAINTS } from "./config";
+import { RTC_CONFIGURATION, MEDIA_CONSTRAINTS, VIDEO_ENCODING } from "./config";
 import { RTCIceCandidateInit, RTCSessionDescriptionInit } from "../types/signaling";
 
 export type RemoteTrackHandler = (stream: MediaStream) => void;
@@ -22,6 +22,7 @@ export class WebRTCService {
   private peerConnection: RTCPeerConnection | null = null;
   private localStream: MediaStream | null = null;
   private remoteStream: MediaStream | null = null;
+  private pendingRemoteIceCandidates: RTCIceCandidateInit[] = [];
   private currentFacingMode: "user" | "environment" = "user";
 
   private onRemoteTrack: RemoteTrackHandler | null = null;
@@ -83,7 +84,10 @@ export class WebRTCService {
 
     if (this.localStream) {
       this.localStream.getTracks().forEach((track: MediaStreamTrack) => {
-        pc.addTrack(track, this.localStream as MediaStream);
+        const sender = pc.addTrack(track, this.localStream as MediaStream);
+        if (track.kind === "video") {
+          void this.configureVideoSender(sender);
+        }
       });
     }
 
@@ -119,6 +123,21 @@ export class WebRTCService {
     return pc;
   }
 
+  private async configureVideoSender(sender: ReturnType<RTCPeerConnection["addTrack"]>): Promise<void> {
+    try {
+      const parameters = sender.getParameters();
+      const [encoding] = parameters.encodings;
+      if (!encoding) return;
+
+      encoding.maxBitrate = VIDEO_ENCODING.maxBitrate;
+      encoding.maxFramerate = VIDEO_ENCODING.maxFramerate;
+      parameters.degradationPreference = "maintain-framerate";
+      await sender.setParameters(parameters);
+    } catch (error) {
+      console.warn("[webrtc] Could not apply adaptive video settings; using platform defaults", error);
+    }
+  }
+
   async createOffer(): Promise<RTCSessionDescriptionInit> {
     if (!this.peerConnection) throw new Error("PeerConnection not initialized");
     const offer = await this.peerConnection.createOffer({});
@@ -136,10 +155,18 @@ export class WebRTCService {
   async setRemoteDescription(description: RTCSessionDescriptionInit): Promise<void> {
     if (!this.peerConnection) throw new Error("PeerConnection not initialized");
     await this.peerConnection.setRemoteDescription(new RTCSessionDescription(description));
+    const pendingCandidates = this.pendingRemoteIceCandidates.splice(0);
+    for (const candidate of pendingCandidates) {
+      await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+    }
   }
 
   async addIceCandidate(candidate: RTCIceCandidateInit): Promise<void> {
     if (!this.peerConnection) throw new Error("PeerConnection not initialized");
+    if (!this.peerConnection.remoteDescription) {
+      this.pendingRemoteIceCandidates.push(candidate);
+      return;
+    }
     await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
   }
 
@@ -184,6 +211,7 @@ export class WebRTCService {
     this.localStream?.getTracks().forEach((track: MediaStreamTrack) => track.stop());
     this.localStream = null;
     this.remoteStream = null;
+    this.pendingRemoteIceCandidates = [];
 
     if (this.peerConnection) {
       this.peerConnection.close();

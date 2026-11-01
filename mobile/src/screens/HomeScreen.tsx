@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { AntDesign } from "@expo/vector-icons";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Alert, Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { RootStackParamList } from "../navigation/types";
 import { useAuthContext } from "../context/AuthContext";
 import ErrorMessage from "../components/ErrorMessage";
 import { useRoomContext } from "../context/RoomContext";
-import { getSavedRooms, saveRoom } from "../utils/storage";
-import { CourseSection, SavedRoom, ScheduledRoom } from "../types/models";
+import { CourseSection, ScheduledRoom } from "../types/models";
 import { fetchCourseSections } from "../api/admissions";
 import { fetchScheduledRooms, scheduleRoom } from "../api/rooms";
 
@@ -37,12 +35,9 @@ function parseLocalDateTime(dateValue: string, timeValue: string): Date | null {
 export default function HomeScreen({ navigation }: Props) {
   const { user } = useAuthContext();
   const { joinRoom, error: roomError, clearError: clearRoomError } = useRoomContext();
-  const [savedRooms, setSavedRooms] = useState<SavedRoom[]>([]);
   const [courseSections, setCourseSections] = useState<CourseSection[]>([]);
   const [scheduledRooms, setScheduledRooms] = useState<ScheduledRoom[]>([]);
-  const [showStudentForm, setShowStudentForm] = useState(false);
-  const [meetingId, setMeetingId] = useState("");
-  const [passcode, setPasscode] = useState("");
+  const [now, setNow] = useState(Date.now());
   const [scheduledDate, setScheduledDate] = useState(todayDateInput);
   const [startTime, setStartTime] = useState("19:30");
   const [endTime, setEndTime] = useState("21:30");
@@ -53,7 +48,8 @@ export default function HomeScreen({ navigation }: Props) {
   const userRole = user?.role;
 
   useEffect(() => {
-    void getSavedRooms().then(setSavedRooms);
+    const timer = setInterval(() => setNow(Date.now()), 15_000);
+    return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -68,11 +64,6 @@ export default function HomeScreen({ navigation }: Props) {
       setFormError(error instanceof Error ? error.message : "Could not load scheduled rooms.");
     });
   }, [userId, userRole]);
-
-  function openRoom(room: SavedRoom) {
-    joinRoom(room.roomId, room.passcode);
-    navigation.navigate("Room", { roomId: room.roomId, passcode: room.passcode });
-  }
 
   async function handleCreateRoom() {
     const startsAt = parseLocalDateTime(scheduledDate, startTime);
@@ -106,23 +97,6 @@ export default function HomeScreen({ navigation }: Props) {
     }
   }
 
-  async function handleSaveStudentRoom() {
-    const roomId = meetingId.trim().toUpperCase();
-    const code = passcode.trim();
-    if (!roomId || !code) {
-      setFormError("Enter the meeting ID and passcode.");
-      return;
-    }
-
-    const room = { roomId, passcode: code };
-    await saveRoom(room);
-    setSavedRooms((rooms) => [room, ...rooms.filter((savedRoom) => savedRoom.roomId !== roomId)]);
-    setMeetingId("");
-    setPasscode("");
-    setFormError(null);
-    setShowStudentForm(false);
-  }
-
   const isTeacher = user?.role === "TEACHER";
   const schedulableSubjects = useMemo(
     () => courseSections.flatMap((section) => section.subjects.map((subject) => ({
@@ -131,14 +105,12 @@ export default function HomeScreen({ navigation }: Props) {
     }))),
     [courseSections]
   );
-
   function joinScheduledRoom(room: ScheduledRoom) {
     joinRoom(room.id, room.passcode);
     navigation.navigate("Room", { roomId: room.id, passcode: room.passcode });
   }
 
   function roomJoinLabel(room: ScheduledRoom) {
-    const now = Date.now();
     if (now < new Date(room.startsAt).getTime()) return "Opens at scheduled time";
     if (now > new Date(room.endsAt).getTime()) return "Meeting ended";
     return "Join room";
@@ -156,8 +128,8 @@ export default function HomeScreen({ navigation }: Props) {
     }
 
     return scheduledRooms.map((room) => {
-      const canJoin = Date.now() >= new Date(room.startsAt).getTime() &&
-        Date.now() <= new Date(room.endsAt).getTime();
+      const canJoin = now >= new Date(room.startsAt).getTime() &&
+        now <= new Date(room.endsAt).getTime();
       return (
         <View key={room.id} className="mt-3 rounded-2xl bg-app-surface p-4">
           <Text className="text-base font-bold text-app-text">{room.subject.title}</Text>
@@ -183,20 +155,8 @@ export default function HomeScreen({ navigation }: Props) {
       <View className="mb-5 flex-row items-center justify-between">
         <View>
           <Text className="text-2xl font-bold text-app-text">Rooms</Text>
-          <Text className="mt-1 text-sm text-app-muted-2">{isTeacher ? "Host a scheduled class" : "Join your saved classes"}</Text>
+          <Text className="mt-1 text-sm text-app-muted-2">{isTeacher ? "Host a scheduled class" : "Join your classes"}</Text>
         </View>
-        {!isTeacher ? (
-          <TouchableOpacity
-            accessibilityLabel="Add room"
-            className="h-12 w-12 items-center justify-center rounded-full bg-white"
-            onPress={() => {
-              setFormError(null);
-              setShowStudentForm(true);
-            }}
-          >
-            <AntDesign name="plus-circle" color="#000" size={24} />
-          </TouchableOpacity>
-        ) : null}
       </View>
 
       <ErrorMessage message={roomError ?? formError} onDismiss={() => { clearRoomError(); setFormError(null); }} />
@@ -257,59 +217,9 @@ export default function HomeScreen({ navigation }: Props) {
         <View>
           <Text className="text-lg font-bold text-app-text">Upcoming class rooms</Text>
           {renderScheduledRooms()}
-          <Text className="mb-3 mt-6 text-lg font-bold text-app-text">Saved rooms</Text>
-          {savedRooms.length === 0 ? (
-            <View className="rounded-2xl border border-dashed border-app-border bg-app-surface p-6">
-              <Text className="text-center text-base font-bold text-app-text">No saved rooms</Text>
-              <Text className="mt-1 text-center text-sm text-app-muted-2">Use the plus button to save a teacher's room.</Text>
-            </View>
-          ) : (
-            savedRooms.map((room) => (
-              <View key={room.roomId} className="mb-3 rounded-2xl bg-app-surface p-4">
-                <Text className="text-base font-bold text-app-text">Room {room.roomId}</Text>
-                <Text className="mt-1 text-sm text-app-muted-2">The teacher's joining window controls access.</Text>
-                <TouchableOpacity className="mt-3 items-center rounded-xl bg-app-primary py-3" onPress={() => openRoom(room)}>
-                  <Text className="font-bold text-white">Join room</Text>
-                </TouchableOpacity>
-              </View>
-            ))
-          )}
         </View>
       )}
       </ScrollView>
-
-      <Modal visible={showStudentForm} transparent animationType="slide" onRequestClose={() => setShowStudentForm(false)}>
-        <View className="flex-1 justify-end bg-black/60">
-          <View className="rounded-t-3xl bg-app-surface px-5 pb-8 pt-5">
-            <View className="mb-5 flex-row items-center justify-between">
-              <Text className="text-xl font-bold text-app-text">Save a room</Text>
-              <TouchableOpacity onPress={() => setShowStudentForm(false)}>
-                <AntDesign name="close" color="#F9FAFB" size={22} />
-              </TouchableOpacity>
-            </View>
-            <TextInput
-              value={meetingId}
-              onChangeText={setMeetingId}
-              keyboardType="number-pad"
-              placeholder="Meeting ID"
-              placeholderTextColor="#64748B"
-              className="mb-3 rounded-xl bg-app-surface-alt px-3 py-3 text-app-text"
-            />
-            <TextInput
-              value={passcode}
-              onChangeText={setPasscode}
-              keyboardType="number-pad"
-              secureTextEntry
-              placeholder="Passcode"
-              placeholderTextColor="#64748B"
-              className="rounded-xl bg-app-surface-alt px-3 py-3 text-app-text"
-            />
-            <TouchableOpacity className="mt-5 items-center rounded-xl bg-app-primary py-3" onPress={handleSaveStudentRoom}>
-              <Text className="font-bold text-white">Save room</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }

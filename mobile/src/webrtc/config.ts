@@ -30,8 +30,13 @@ export const MEDIA_CONSTRAINTS = {
   audio: true,
   video: {
     facingMode: "user",
-    width: { ideal: 640 },
-    height: { ideal: 480 },
-    frameRate: { ideal: 24, max: 30 },
+    width: { ideal: 1280 },
+    height: { ideal: 720 },
+    frameRate: { ideal: 30, max: 30 },
   },
 };
+
+export const VIDEO_ENCODING = {
+  maxBitrate: 1_500_000,
+  maxFramerate: 30,
+} as const;

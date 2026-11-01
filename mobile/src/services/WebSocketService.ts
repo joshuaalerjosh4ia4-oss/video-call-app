@@ -14,7 +14,7 @@ if (!WS_URL) {
 
 type MessageHandler = (message: IncomingSignal) => void;
 type ConnectionHandler = () => void;
-type AuthFailureHandler = () => void;
+type TokenFailureHandler = (error: unknown) => void;
 
 const RECONNECT_DELAY_MS = 2000;
 const MAX_RECONNECT_DELAY_MS = 15000;
@@ -32,79 +32,96 @@ interface BufferedIncomingMessage {
 // for the whole app lifecycle.
 export class WebSocketService {
   private socket: WebSocket | null = null;
-  private token: string | null = null;
+  private tokenProvider: (() => Promise<string>) | null = null;
   private messageHandlers = new Set<MessageHandler>();
   private openHandlers = new Set<ConnectionHandler>();
   private closeHandlers = new Set<ConnectionHandler>();
-  private authFailureHandlers = new Set<AuthFailureHandler>();
+  private tokenFailureHandlers = new Set<TokenFailureHandler>();
   private pendingMessages: OutgoingSignal[] = [];
   private bufferedIncomingMessages: BufferedIncomingMessage[] = [];
   private reconnectAttempt = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private manuallyClosed = false;
+  private connectionGeneration = 0;
+  private tokenRequestInProgress = false;
 
-  connect(token: string): void {
-    this.token = token;
+  connect(tokenProvider: () => Promise<string>): void {
+    this.tokenProvider = tokenProvider;
     this.manuallyClosed = false;
+    this.connectionGeneration += 1;
+    this.tokenRequestInProgress = false;
     console.log("[signaling] connecting", WS_URL ?? "missing WebSocket URL");
     this.openSocket();
   }
 
   private openSocket(): void {
-    if (!this.token || !WS_URL) return;
+    const tokenProvider = this.tokenProvider;
+    if (!tokenProvider || !WS_URL || this.tokenRequestInProgress) return;
 
     // Avoid creating a second connection if one is already open/connecting.
     if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
       return;
     }
 
-    const url = `${WS_URL}?token=${encodeURIComponent(this.token)}`;
-    const socket = new WebSocket(url);
+    const generation = this.connectionGeneration;
+    this.tokenRequestInProgress = true;
+    void tokenProvider().then((token) => {
+      if (generation !== this.connectionGeneration || this.manuallyClosed) return;
+      if (!token) throw new Error("The WebSocket token endpoint returned an empty token");
 
-    socket.onopen = () => {
-      this.reconnectAttempt = 0;
-      console.log("[signaling] connected");
-      this.openHandlers.forEach((handler) => handler());
-      this.pendingMessages.splice(0).forEach((message) => {
-        socket.send(JSON.stringify(message));
-      });
-    };
+      const socket = new WebSocket(WS_URL, ["myclasses-ws", token]);
+      this.socket = socket;
 
-    socket.onmessage = (event) => {
-      try {
-        const parsed = JSON.parse(event.data) as IncomingSignal;
-        const now = Date.now();
-        this.bufferedIncomingMessages = this.bufferedIncomingMessages.filter(
-          ({ receivedAt }) => now - receivedAt < INCOMING_MESSAGE_TTL_MS
-        );
-        this.bufferedIncomingMessages.push({ message: parsed, receivedAt: now });
-        console.log("[signaling] received", parsed.type);
-        if (parsed.type === "error" && parsed.message.toLowerCase().includes("authentication failed")) {
-          this.manuallyClosed = true;
-          this.authFailureHandlers.forEach((handler) => handler());
-          socket.close(4001, "Unauthorized");
+      socket.onopen = () => {
+        this.reconnectAttempt = 0;
+        console.log("[signaling] connected");
+        this.openHandlers.forEach((handler) => handler());
+        this.pendingMessages.splice(0).forEach((message) => {
+          socket.send(JSON.stringify(message));
+        });
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const parsed = JSON.parse(event.data) as IncomingSignal;
+          const now = Date.now();
+          this.bufferedIncomingMessages = this.bufferedIncomingMessages.filter(
+            ({ receivedAt }) => now - receivedAt < INCOMING_MESSAGE_TTL_MS
+          );
+          this.bufferedIncomingMessages.push({ message: parsed, receivedAt: now });
+          console.log("[signaling] received", parsed.type);
+          if (parsed.type === "error" && parsed.message.toLowerCase().includes("authentication failed")) {
+            socket.close(4001, "Unauthorized");
+          }
+          this.messageHandlers.forEach((handler) => handler(parsed));
+        } catch {
+          console.warn("Received malformed WebSocket message");
         }
-        this.messageHandlers.forEach((handler) => handler(parsed));
-      } catch {
-        console.warn("Received malformed WebSocket message");
+      };
+
+      socket.onclose = () => {
+        console.warn("[signaling] disconnected");
+        this.closeHandlers.forEach((handler) => handler());
+        if (!this.manuallyClosed) {
+          this.scheduleReconnect();
+        }
+      };
+
+      socket.onerror = () => {
+        console.warn("[signaling] connection error");
+        // onclose fires right after onerror for browser/RN WebSocket, so
+        // reconnection is handled there.
+      };
+    }).catch((error: unknown) => {
+      if (generation !== this.connectionGeneration || this.manuallyClosed) return;
+      console.warn("[signaling] could not get a fresh WebSocket token");
+      this.tokenFailureHandlers.forEach((handler) => handler(error));
+      this.scheduleReconnect();
+    }).finally(() => {
+      if (generation === this.connectionGeneration) {
+        this.tokenRequestInProgress = false;
       }
-    };
-
-    socket.onclose = () => {
-      console.warn("[signaling] disconnected");
-      this.closeHandlers.forEach((handler) => handler());
-      if (!this.manuallyClosed) {
-        this.scheduleReconnect();
-      }
-    };
-
-    socket.onerror = () => {
-      console.warn("[signaling] connection error");
-      // onclose fires right after onerror for browser/RN WebSocket, so
-      // reconnection is handled there.
-    };
-
-    this.socket = socket;
+    });
   }
 
   private scheduleReconnect(): void {
@@ -148,13 +165,16 @@ export class WebSocketService {
     return () => this.closeHandlers.delete(handler);
   }
 
-  onAuthFailure(handler: AuthFailureHandler): () => void {
-    this.authFailureHandlers.add(handler);
-    return () => this.authFailureHandlers.delete(handler);
+  onTokenFailure(handler: TokenFailureHandler): () => void {
+    this.tokenFailureHandlers.add(handler);
+    return () => this.tokenFailureHandlers.delete(handler);
   }
 
   disconnect(): void {
     this.manuallyClosed = true;
+    this.connectionGeneration += 1;
+    this.tokenProvider = null;
+    this.tokenRequestInProgress = false;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;

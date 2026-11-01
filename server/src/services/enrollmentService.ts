@@ -113,6 +113,49 @@ export async function listSubjectPeople(studentId: string, subjectId: string) {
     .sort((first, second) => first.username.localeCompare(second.username));
 }
 
+export async function listSubjectPosts(studentId: string, subjectId: string) {
+  const enrollments = await listEnrollments(studentId);
+  if (!enrollments.some(({ subject }) => subject?.id === subjectId)) {
+    throw new HttpError(403, "You must be enrolled in this subject to view its classroom posts");
+  }
+
+  return prisma.classroomPost.findMany({
+    where: { subjectId },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    select: {
+      id: true,
+      type: true,
+      title: true,
+      content: true,
+      dueAt: true,
+      createdAt: true,
+      teacher: { select: { username: true } },
+    },
+  });
+}
+
+export async function listUpcomingWork(studentId: string) {
+  const enrollments = await listEnrollments(studentId);
+  const subjectIds = [...new Set(enrollments.flatMap(({ subject }) => subject ? [subject.id] : []))];
+  if (subjectIds.length === 0) return [];
+
+  return prisma.classroomPost.findMany({
+    where: {
+      subjectId: { in: subjectIds },
+      type: "ASSIGNMENT",
+      OR: [{ dueAt: null }, { dueAt: { gte: new Date() } }],
+    },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      subjectId: true,
+      title: true,
+      dueAt: true,
+      createdAt: true,
+    },
+  });
+}
+
 export async function enrollStudent(studentId: string, joinCodeInput: string) {
   await requireStudent(studentId);
   const joinCode = joinCodeInput.trim();

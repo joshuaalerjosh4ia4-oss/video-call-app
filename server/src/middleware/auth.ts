@@ -15,7 +15,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
 
   let payload;
   try {
-    payload = verifyToken(token);
+    payload = verifyToken(token, "auth");
   } catch {
     sendError(res, "Invalid or expired token", 401);
     return;

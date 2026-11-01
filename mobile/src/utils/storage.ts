@@ -1,6 +1,6 @@
 import * as SecureStore from "expo-secure-store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { EnrolledSubject, MeetingRecord, SavedRoom } from "../types/models";
+import { EnrolledSubject, MeetingRecord } from "../types/models";
 
 // Auth tokens are sensitive, so they're persisted with expo-secure-store
 // (Keychain on iOS, EncryptedSharedPreferences on Android) rather than
@@ -8,7 +8,6 @@ import { EnrolledSubject, MeetingRecord, SavedRoom } from "../types/models";
 const TOKEN_KEY = "simplecall_auth_token";
 const USER_KEY = "simplecall_auth_user";
 const MEETING_HISTORY_KEY = "simplecall_meeting_history";
-const SAVED_ROOMS_KEY = "simplecall_saved_rooms";
 const ENROLLED_SUBJECTS_KEY = "simplecall_enrolled_subjects";
 
 export async function saveAuthToken(token: string): Promise<void> {
@@ -71,24 +70,6 @@ export async function getEnrolledSubjects(): Promise<EnrolledSubject[]> {
 
       return [{ id: storedSubject.id, code }];
     });
-  } catch {
-    return [];
-  }
-}
-
-export async function saveRoom(room: SavedRoom): Promise<void> {
-  const existing = await getSavedRooms();
-  const withoutDuplicate = existing.filter((savedRoom) => savedRoom.roomId !== room.roomId);
-  await AsyncStorage.setItem(SAVED_ROOMS_KEY, JSON.stringify([room, ...withoutDuplicate]));
-}
-
-export async function getSavedRooms(): Promise<SavedRoom[]> {
-  const stored = await AsyncStorage.getItem(SAVED_ROOMS_KEY);
-  if (!stored) return [];
-
-  try {
-    const rooms = JSON.parse(stored) as unknown;
-    return Array.isArray(rooms) ? (rooms as SavedRoom[]) : [];
   } catch {
     return [];
   }

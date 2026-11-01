@@ -7,13 +7,14 @@ import {
   Modal,
   Platform,
   RefreshControl,
+  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { Admission, EnrolledSubject, SubjectPeopleMember } from "../types/models";
-import { enrollInCourse, fetchEnrollments, fetchSubjectPeople } from "../api/enrollments";
+import { Admission, ClassroomPost, EnrolledSubject, SubjectPeopleMember, UpcomingWork } from "../types/models";
+import { enrollInCourse, fetchEnrollments, fetchSubjectPeople, fetchSubjectPosts, fetchUpcomingWork } from "../api/enrollments";
 import { fetchMyAdmission } from "../api/admissions";
 import { useAuthContext } from "../context/AuthContext";
 import { scheduleClassReminders } from "../services/ClassReminderService";
@@ -33,6 +34,12 @@ export default function SubjectScreen() {
   const [classPeople, setClassPeople] = useState<SubjectPeopleMember[]>([]);
   const [isLoadingPeople, setIsLoadingPeople] = useState(false);
   const [peopleError, setPeopleError] = useState<string | null>(null);
+  const [classroomPosts, setClassroomPosts] = useState<ClassroomPost[]>([]);
+  const [isLoadingPosts, setIsLoadingPosts] = useState(false);
+  const [postsError, setPostsError] = useState<string | null>(null);
+  const [upcomingWork, setUpcomingWork] = useState<UpcomingWork[]>([]);
+  const [upcomingWorkError, setUpcomingWorkError] = useState<string | null>(null);
+  const [isLoadingUpcomingWork, setIsLoadingUpcomingWork] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [subjectCode, setSubjectCode] = useState("");
 
@@ -124,6 +131,39 @@ export default function SubjectScreen() {
     };
   }, [activeClassroomTab, selectedSubject?.subjectId]);
 
+  useEffect(() => {
+    if (
+      !["Stream", "Classwork"].includes(activeClassroomTab) ||
+      !selectedSubject?.subjectId
+    ) {
+      setClassroomPosts([]);
+      setIsLoadingPosts(false);
+      setPostsError(null);
+      return;
+    }
+
+    let isCurrentRequest = true;
+    setIsLoadingPosts(true);
+    setPostsError(null);
+    void fetchSubjectPosts(selectedSubject.subjectId)
+      .then((posts) => {
+        if (isCurrentRequest) setClassroomPosts(posts);
+      })
+      .catch((error: unknown) => {
+        if (isCurrentRequest) {
+          setPostsError(error instanceof Error ? error.message : "Could not load classroom posts.");
+          setClassroomPosts([]);
+        }
+      })
+      .finally(() => {
+        if (isCurrentRequest) setIsLoadingPosts(false);
+      });
+
+    return () => {
+      isCurrentRequest = false;
+    };
+  }, [activeClassroomTab, selectedSubject?.subjectId]);
+
   function getClassTitle(subject: EnrolledSubject) {
     if (subject.title) return subject.title;
     return admission?.subjects?.find(
@@ -149,6 +189,51 @@ export default function SubjectScreen() {
   }
 
   const filteredSubjects = subjects.filter((subject) => subject.code.toLowerCase().includes(searchQuery.trim().toLowerCase()));
+  const subjectIdKey = subjects.flatMap(({ subjectId }) => subjectId ? [subjectId] : []).join(",");
+
+  useEffect(() => {
+    if (user?.role !== "STUDENT" || !subjectIdKey) {
+      setUpcomingWork([]);
+      setUpcomingWorkError(null);
+      setIsLoadingUpcomingWork(false);
+      return;
+    }
+
+    let isCurrentRequest = true;
+    setIsLoadingUpcomingWork(true);
+    setUpcomingWorkError(null);
+    void fetchUpcomingWork()
+      .then((work) => {
+        if (isCurrentRequest) setUpcomingWork(work);
+      })
+      .catch((error: unknown) => {
+        if (isCurrentRequest) {
+          setUpcomingWorkError(error instanceof Error ? error.message : "Could not load upcoming work.");
+          setUpcomingWork([]);
+        }
+      })
+      .finally(() => {
+        if (isCurrentRequest) setIsLoadingUpcomingWork(false);
+      });
+
+    return () => {
+      isCurrentRequest = false;
+    };
+  }, [subjectIdKey, user?.role]);
+
+  const upcomingWorkBySubject = new Map<string, UpcomingWork[]>();
+  upcomingWork.forEach((work) => {
+    const subjectWork = upcomingWorkBySubject.get(work.subjectId) ?? [];
+    subjectWork.push(work);
+    upcomingWorkBySubject.set(work.subjectId, subjectWork);
+  });
+  upcomingWorkBySubject.forEach((work) => {
+    work.sort((first, second) => {
+      if (!first.dueAt) return second.dueAt ? 1 : 0;
+      if (!second.dueAt) return -1;
+      return new Date(first.dueAt).getTime() - new Date(second.dueAt).getTime();
+    });
+  });
 
   return (
     <View className="flex-1 bg-app-bg pt-14">
@@ -187,7 +272,25 @@ export default function SubjectScreen() {
               <Text className="text-xl font-bold text-white" numberOfLines={1}>{getClassTitle(item)}</Text>
               <Text className="mt-1 text-sm text-blue-100">{getClassSubtitle(item)} · {getClassSchedule(item)}</Text>
             </View>
-            <View className="p-4"><View className="flex-row items-center justify-end"><Ionicons name="chevron-forward" size={19} color="#563B68" /></View><Text className="mt-2 text-sm text-app-muted-2">No upcoming work</Text></View>
+            <View className="p-4">
+              <View className="flex-row items-center justify-end"><Ionicons name="chevron-forward" size={19} color="#563B68" /></View>
+              {upcomingWorkError ? (
+                <Text className="mt-2 text-sm text-red-600">{upcomingWorkError}</Text>
+              ) : isLoadingUpcomingWork ? (
+                <Text className="mt-2 text-sm text-app-muted-2">Loading upcoming work...</Text>
+              ) : (upcomingWorkBySubject.get(item.subjectId ?? "") ?? []).length > 0 ? (
+                (upcomingWorkBySubject.get(item.subjectId ?? "") ?? []).slice(0, 2).map((work) => (
+                  <View key={work.id} className="mt-2">
+                    <Text className="text-sm font-semibold text-app-text" numberOfLines={1}>{work.title}</Text>
+                    {work.dueAt ? (
+                      <Text className="mt-1 text-xs text-app-muted-2">Due {new Date(work.dueAt).toLocaleString()}</Text>
+                    ) : null}
+                  </View>
+                ))
+              ) : (
+                <Text className="mt-2 text-sm text-app-muted-2">No upcoming work</Text>
+              )}
+            </View>
           </TouchableOpacity>
         )}
         ListEmptyComponent={
@@ -232,13 +335,47 @@ export default function SubjectScreen() {
                 )}
               </View>
             ) : (
-              <View className="mx-4 mt-5 rounded-2xl border border-app-border bg-app-surface p-5">
-                <Ionicons name={activeClassroomTab === "Stream" ? "chatbubble-ellipses-outline" : "document-text-outline"} size={30} color="#563B68" />
-                <Text className="mt-3 text-base font-bold text-app-text">
-                  {activeClassroomTab === "Stream" ? "No announcements yet" : "No classwork yet"}
-                </Text>
-                <Text className="mt-2 text-sm leading-5 text-app-muted-2">Your teacher has not posted anything here yet.</Text>
-              </View>
+              <ScrollView className="flex-1 px-4" contentContainerStyle={{ paddingTop: 20, paddingBottom: 28 }}>
+                {isLoadingPosts ? (
+                  <Text className="text-sm text-app-muted-2">Loading classroom posts...</Text>
+                ) : postsError ? (
+                  <Text className="text-sm text-red-600">{postsError}</Text>
+                ) : classroomPosts.filter((post) =>
+                  activeClassroomTab === "Stream"
+                    ? post.type === "ANNOUNCEMENT"
+                    : post.type === "ASSIGNMENT"
+                ).length > 0 ? (
+                  classroomPosts
+                    .filter((post) => activeClassroomTab === "Stream"
+                      ? post.type === "ANNOUNCEMENT"
+                      : post.type === "ASSIGNMENT")
+                    .map((post) => (
+                      <View key={post.id} className="mb-4 rounded-2xl border border-app-border bg-app-surface p-5">
+                        <Text className="text-xs font-semibold uppercase tracking-wide text-app-primary">
+                          {post.type === "ASSIGNMENT" ? "Assignment" : "Announcement"}
+                        </Text>
+                        <Text className="mt-2 text-lg font-bold text-app-text">{post.title}</Text>
+                        <Text className="mt-2 text-sm leading-5 text-app-muted-2">{post.content}</Text>
+                        {post.dueAt ? (
+                          <Text className="mt-3 text-sm font-semibold text-app-text">
+                            Due {new Date(post.dueAt).toLocaleString()}
+                          </Text>
+                        ) : null}
+                        <Text className="mt-3 text-xs text-app-muted-2">
+                          {post.teacher.username} · {new Date(post.createdAt).toLocaleString()}
+                        </Text>
+                      </View>
+                    ))
+                ) : (
+                  <View className="rounded-2xl border border-app-border bg-app-surface p-5">
+                    <Ionicons name={activeClassroomTab === "Stream" ? "chatbubble-ellipses-outline" : "document-text-outline"} size={30} color="#563B68" />
+                    <Text className="mt-3 text-base font-bold text-app-text">
+                      {activeClassroomTab === "Stream" ? "No announcements yet" : "No classwork yet"}
+                    </Text>
+                    <Text className="mt-2 text-sm leading-5 text-app-muted-2">Your teacher has not posted anything here yet.</Text>
+                  </View>
+                )}
+              </ScrollView>
             )}
           </> : null}
         </View>

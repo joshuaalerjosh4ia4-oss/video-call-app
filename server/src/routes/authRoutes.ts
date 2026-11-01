@@ -12,6 +12,7 @@ import {
 	resendVerification,
 	verifyEmail,
 	verifyEmailSchema,
+	wsToken,
 } from "../controllers/authController";
 import { validateBody } from "../middleware/validate";
 import { authMiddleware } from "../middleware/auth";
@@ -26,5 +27,6 @@ router.post("/change-password", authMiddleware, validateBody(changePasswordSchem
 router.post("/verify-email/resend", authRateLimiter, validateBody(emailSchema), resendVerification);
 router.post("/verify-email/confirm", authRateLimiter, validateBody(verifyEmailSchema), verifyEmail);
 router.get("/me", authMiddleware, me);
+router.get("/ws-token", authMiddleware, wsToken);
 
 export default router;

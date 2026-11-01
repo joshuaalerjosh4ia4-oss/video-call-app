@@ -33,6 +33,11 @@ enum PaymentStatus {
   PAID
 }
 
+enum ClassroomPostType {
+  ANNOUNCEMENT
+  ASSIGNMENT
+}
+
 model User {
   id           String   @id @default(uuid())
   username     String   @unique
@@ -59,6 +64,7 @@ model User {
   sections     CourseSection[]
   teachingSections CourseSection[] @relation("TeachingSections")
   admissions   Admission[]
+  classroomPosts ClassroomPost[] @relation("ClassroomPostTeacher")
   emailVerificationCode EmailVerificationCode?
 
   @@map("users")
@@ -136,10 +142,29 @@ model Subject {
   section    CourseSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
   admissions AdmissionSubject[]
   rooms      Room[]
+  classroomPosts ClassroomPost[]
   createdAt DateTime      @default(now())
 
   @@unique([sectionId, code])
   @@map("subjects")
+}
+
+model ClassroomPost {
+  id        String            @id @default(uuid())
+  type      ClassroomPostType
+  title     String
+  content   String
+  dueAt     DateTime?
+  teacherId String
+  subjectId String
+  teacher   User              @relation("ClassroomPostTeacher", fields: [teacherId], references: [id], onDelete: Cascade)
+  subject   Subject           @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@index([subjectId, createdAt])
+  @@index([teacherId, createdAt])
+  @@map("classroom_posts")
 }
 
 model Admission {

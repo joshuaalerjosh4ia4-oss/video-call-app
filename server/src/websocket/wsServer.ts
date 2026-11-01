@@ -1,12 +1,12 @@
 import { IncomingMessage } from "http";
 import { Server as HttpServer } from "http";
 import { WebSocket, WebSocketServer } from "ws";
-import { URL } from "url";
 import { env } from "../config/env";
 import { verifyToken } from "../utils/jwt";
 import { registerConnection, removeConnection, getOnlineUserIds } from "./presence";
 import { ClientToServerMessage, RoomParticipant, ServerToClientMessage } from "./types";
 import { prisma } from "../config/prisma";
+import { z } from "zod";
 
 interface AuthenticatedSocket extends WebSocket {
   userId?: string;
@@ -26,6 +26,64 @@ const MAX_PASSCODE_LENGTH = 128;
 const MAX_CHAT_LENGTH = 2_000;
 const MAX_REACTION_LENGTH = 32;
 const rooms = new Map<string, { passcode: string; members: Map<string, { socket: AuthenticatedSocket; username: string }> }>();
+const roomIdSchema = z.string().min(1).max(MAX_ROOM_ID_LENGTH);
+const sessionDescriptionSchema = z.object({
+  type: z.enum(["offer", "answer", "pranswer", "rollback"]),
+  sdp: z.string().max(64 * 1024),
+}).strict();
+const clientMessageSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("room-create"),
+    roomId: roomIdSchema,
+    passcode: z.string().min(1).max(MAX_PASSCODE_LENGTH),
+    startsAt: z.string().max(64),
+    endsAt: z.string().max(64),
+  }).strict(),
+  z.object({
+    type: z.literal("room-join"),
+    roomId: roomIdSchema,
+    passcode: z.string().min(1).max(MAX_PASSCODE_LENGTH),
+  }).strict(),
+  z.object({ type: z.literal("room-leave"), roomId: roomIdSchema }).strict(),
+  z.object({
+    type: z.literal("room-offer"),
+    roomId: roomIdSchema,
+    targetUserId: z.string().min(1).max(64),
+    offer: sessionDescriptionSchema,
+  }).strict(),
+  z.object({
+    type: z.literal("room-answer"),
+    roomId: roomIdSchema,
+    targetUserId: z.string().min(1).max(64),
+    answer: sessionDescriptionSchema,
+  }).strict(),
+  z.object({
+    type: z.literal("room-ice-candidate"),
+    roomId: roomIdSchema,
+    targetUserId: z.string().min(1).max(64),
+    candidate: z.object({
+      candidate: z.string().max(4_096),
+      sdpMid: z.string().max(256).nullable(),
+      sdpMLineIndex: z.number().int().min(0).max(1_024).nullable(),
+    }).strict(),
+  }).strict(),
+  z.object({
+    type: z.literal("room-media-state"),
+    roomId: roomIdSchema,
+    microphoneEnabled: z.boolean(),
+    cameraEnabled: z.boolean(),
+  }).strict(),
+  z.object({
+    type: z.literal("room-chat"),
+    roomId: roomIdSchema,
+    text: z.string().max(MAX_CHAT_LENGTH),
+  }).strict(),
+  z.object({
+    type: z.literal("room-reaction"),
+    roomId: roomIdSchema,
+    emoji: z.string().max(MAX_REACTION_LENGTH),
+  }).strict(),
+]);
 
 function send(socket: WebSocket, message: ServerToClientMessage): void {
   if (socket.readyState === WebSocket.OPEN) {
@@ -35,10 +93,12 @@ function send(socket: WebSocket, message: ServerToClientMessage): void {
 
 async function authenticateRequest(req: IncomingMessage): Promise<{ userId: string; username: string; role: AuthenticatedSocket["role"] } | null> {
   try {
-    const url = new URL(req.url ?? "", "http://localhost");
-    const token = url.searchParams.get("token");
-    if (!token) return null;
-    const payload = verifyToken(token);
+    const protocols = req.headers["sec-websocket-protocol"];
+    const rawProtocols = Array.isArray(protocols) ? protocols.join(",") : typeof protocols === "string" ? protocols : "";
+    const parts = rawProtocols.split(",").map((part) => part.trim()).filter(Boolean);
+    const token = parts.length > 1 ? parts[1] : null;
+    if (!token || !parts.includes("myclasses-ws")) return null;
+    const payload = verifyToken(token, "ws");
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
       select: { username: true, role: true, mustChangePassword: true },
@@ -103,17 +163,18 @@ export function attachWebSocketServer(httpServer: HttpServer): WebSocketServer {
         socket.close(1009, "Message too large");
         return;
       }
-      let parsed: ClientToServerMessage;
       try {
         const candidate: unknown = JSON.parse(raw.toString());
         if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) throw new Error("Message must be an object");
-        parsed = candidate as ClientToServerMessage;
+        const parsed = clientMessageSchema.safeParse(candidate);
+        if (!parsed.success) {
+          send(socket, { type: "error", message: "Invalid message format" });
+          return;
+        }
+        void handleClientMessage(socket, parsed.data);
       } catch {
         send(socket, { type: "error", message: "Invalid message format: expected JSON" });
-        return;
       }
-
-      void handleClientMessage(socket, parsed);
     });
 
     socket.on("close", () => {
@@ -292,10 +353,25 @@ async function joinRoom(
           where: { studentId: socket.userId, courseCode: { in: courseCodes } },
           select: { id: true },
         });
-        if (!enrollment) {
-          canJoin = false;
-        } else {
+        if (enrollment) {
           canJoin = true;
+        } else {
+          const subject = await prisma.subject.findUnique({
+            where: { id: storedRoom.subjectId },
+            select: { code: true },
+          });
+          if (subject) {
+            const matchingSubjectCount = await prisma.subject.count({
+              where: { code: subject.code },
+            });
+            if (matchingSubjectCount === 1) {
+              const legacyEnrollment = await prisma.enrollment.findFirst({
+                where: { studentId: socket.userId, courseCode: subject.code },
+                select: { id: true },
+              });
+              canJoin = legacyEnrollment !== null;
+            }
+          }
         }
       }
       if (!canJoin) {

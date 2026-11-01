@@ -25,11 +25,6 @@ export interface MeetingRecord {
   createdAt: string;
 }
 
-export interface SavedRoom {
-  roomId: string;
-  passcode: string;
-}
-
 export interface ScheduledRoom {
   id: string;
   passcode: string;
@@ -58,6 +53,24 @@ export interface EnrolledSubject {
 export interface SubjectPeopleMember {
   id: string;
   username: string;
+}
+
+export interface ClassroomPost {
+  id: string;
+  type: "ANNOUNCEMENT" | "ASSIGNMENT";
+  title: string;
+  content: string;
+  dueAt: string | null;
+  createdAt: string;
+  teacher: { username: string };
+}
+
+export interface UpcomingWork {
+  id: string;
+  subjectId: string;
+  title: string;
+  dueAt: string | null;
+  createdAt: string;
 }
 
 export interface Enrollment {

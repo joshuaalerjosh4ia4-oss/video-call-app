@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import { ApiRequestError, apiClient } from "../api/client";
 import { webSocketService, WebSocketService } from "../services/WebSocketService";
 import { useAuthContext } from "./AuthContext";
 
@@ -11,7 +12,7 @@ interface WebSocketContextValue {
 const WebSocketContext = createContext<WebSocketContextValue | undefined>(undefined);
 
 export function WebSocketProvider({ children }: { children: React.ReactNode }) {
-  const { token, logout } = useAuthContext();
+  const { token, user, logout } = useAuthContext();
   const [isConnected, setIsConnected] = useState(false);
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
   const serviceRef = useRef(webSocketService);
@@ -19,7 +20,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const service = serviceRef.current;
 
-    if (!token) {
+    if (!token || !user || user.mustChangePassword) {
       service.disconnect();
       setIsConnected(false);
       setOnlineUserIds(new Set());
@@ -28,8 +29,12 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
     const unsubOpen = service.onOpen(() => setIsConnected(true));
     const unsubClose = service.onClose(() => setIsConnected(false));
-    const unsubAuthFailure = service.onAuthFailure(() => {
-      void logout();
+    const unsubTokenFailure = service.onTokenFailure((error) => {
+      if (error instanceof ApiRequestError && (error.statusCode === 401 || error.statusCode === 403)) {
+        void logout();
+      } else {
+        console.warn("[signaling] WebSocket token refresh failed", error);
+      }
     });
     const unsubMessage = service.onMessage((message) => {
       if (message.type === "user-online") {
@@ -45,15 +50,18 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
     // Attach listeners before opening the socket so an early server message
     // cannot arrive before the call and presence handlers are registered.
-    service.connect(token);
+    service.connect(async () => {
+      const { token: socketToken } = await apiClient.get<{ token: string }>("/api/auth/ws-token");
+      return socketToken;
+    });
 
     return () => {
       unsubOpen();
       unsubClose();
-      unsubAuthFailure();
+      unsubTokenFailure();
       unsubMessage();
     };
-  }, [logout, token]);
+  }, [logout, token, user]);
 
   useEffect(() => {
     const service = serviceRef.current;
