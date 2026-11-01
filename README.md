@@ -54,10 +54,10 @@ Run PostgreSQL, the server, and the mobile app in separate terminals.
 Create a `.env` file in the repository root:
 
 ```dotenv
-POSTGRES_USER=videocall
+POSTGRES_USER=database-user
 POSTGRES_PASSWORD=replace-with-a-strong-password
-POSTGRES_DB=videocall_db
-POSTGRES_PORT=5432
+POSTGRES_DB=database_db
+POSTGRES_PORT=PORT //3233
 ```
 
 Start the database from the repository root:
@@ -72,16 +72,18 @@ password used when the database was first initialized.
 
 ### 2. Configure and start the server
 
-Create `server/.env` with the database URL and a long, random JWT secret:
+Create `server/.env` with the database connection details and other required
+server settings:
 
 ```dotenv
-DATABASE_URL="postgresql://videocall:replace-with-a-strong-password@localhost:5432/videocall_db?schema=public"
-JWT_SECRET="replace-with-a-long-random-secret"
+DATABASE_URL="database_url"
+JWT_SECRET="generate-jwt"
 ```
 
-Use the same database credentials as the root `.env` file. URL-encode special
-characters in the database password. For email verification and password
-recovery, optionally configure SMTP:
+Use the same database credentials as the root `.env` file and URL-encode
+special characters in the database password. Set all required server
+environment values in this file. For email verification and password recovery,
+optionally configure SMTP:
 
 ```dotenv
 SMTP_USER="your-smtp-user"
@@ -109,8 +111,8 @@ Create `mobile/.env` and set the API and WebSocket URLs. Replace the sample IP
 with the development computer's LAN IP address:
 
 ```dotenv
-EXPO_PUBLIC_API_URL=http://192.168.1.50:3000
-EXPO_PUBLIC_WS_URL=ws://192.168.1.50:3000/ws
+EXPO_PUBLIC_API_URL=http://IPADDRESS:PORT
+EXPO_PUBLIC_WS_URL=ws://IPADDRESS:PORT/ws
 ```
 
 A physical phone cannot use `localhost` to reach a server on your computer.
@@ -174,7 +176,6 @@ with the server's `WS_PATH` setting; keep `EXPO_PUBLIC_WS_URL` in sync.
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
 | `DATABASE_URL` | Yes | — | PostgreSQL connection string |
-| `JWT_SECRET` | Yes | — | Secret used to sign authentication tokens |
 | `PORT` | No | `3000` | HTTP and WebSocket server port |
 | `CLIENT_ORIGIN` | No | `*` | Allowed CORS origin(s) |
 | `WS_PATH` | No | `/ws` | WebSocket signaling path |
@@ -189,7 +190,6 @@ passwords, private keys, or other secrets in them.
 
 ## Deployment notes
 
-- Do not commit `.env` files or other credentials.
 - Use strong secrets and restrict `CLIENT_ORIGIN` in deployed environments.
 - Use HTTPS/WSS and secure database/network configuration in production.
 - The current WebRTC configuration includes public STUN servers but no TURN
